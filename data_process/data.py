@@ -17,7 +17,7 @@ from data_process.data_utils import *
 def data_filter(root, data_ids, p_keep):
     filtered_ids = []
     for mask_id in data_ids:
-        mask = cv2.imread(self.img_dir + f'/{img_id}.png', 0)
+        mask = cv2.imread(root + f'/{mask_id}.png', 0)
         if np.sum(mask > 0) > 0 or np.random.rand() < p_keep:
             filtered_ids.append(mask_id)
     return np.array(filtered_ids)
@@ -50,13 +50,15 @@ class SIIMDataset(Dataset):
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
 
             features_df = pd.read_csv(self.root + '/train_features.csv')
-            self.features_dict[row['ImeageId']] = [row.to_dict() for _, row in features_df.iterrows()]
+            for _, row in features_df.iterrows():
+                self.features_dict[row['ImeageId']] = row.to_dict()
         
         else:
             self.img_dir = self.root + '/test' + suff
             features_df = pd.read_csv(self.root + '/test_features.csv')
             self.img_list = np.array(features_df['ImageId'])
-            self.features_dict[row['ImeageId']] = [row.to_dict() for _, row in features_df.iterrows()]
+            for _, row in features_df.iterrows():
+                self.features_dict[row['ImeageId']] = row.to_dict()
 
     def __getitem__(self, index):
         
