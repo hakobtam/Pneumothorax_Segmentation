@@ -66,19 +66,18 @@ class SIIMDataset(Dataset):
         target =cv2.imread(self.label_dir + f'/{img_id}.png', 0) if not self.subset == 'test' else None
 
         # apply transforms to both
-        if self.transform is not None:
-            if target is not None:
-                img, target = self.transform({'input': img, 'mask':target})
-            else:
-                img = self.transform({'input': img})
+        if target is not None:
+            img, target = self.transform({'input': img, 'mask':target}).values()
+        else:
+            img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
 
         if target is not None:
             assert target.max() == 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
             target[(target > 0) & (target < 1.0)] = 0
             assert ((target > 0) & (target < 1.0)).sum() == 0
-            return {'input': img, 'target': target, 'params': self.features_dict[img_id]}
+            return {'input': torch.Tensor(img), 'target': torch.Tensor(target), 'params': self.features_dict[img_id]}
         else:
-            return {'input': img, 'params': self.features_dict[img_id]}
+            return {'input': torch.Tensor(img), 'params': self.features_dict[img_id]}
 
     def __len__(self):
         return len(self.img_list)

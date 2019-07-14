@@ -88,10 +88,6 @@ for SZ in [64, 128, 256, 512, 1024]:
         m = np.zeros((1024, 1024)).astype(np.uint8).T
         PIL.Image.fromarray(m).resize((SZ,SZ)).save(f'../input/data/train_mask_{SZ}/{name}')
 
-# print('Saving test ids')
-# test_files = glog.glob('../input/dicom-images-test/**/*.dcm', recursive=True)
-# for file_path in tqdm(test_files):
-
 print('Converting data remaining features for train')
 dcm2csv('train')
 print('Converting data remaining features for test')
