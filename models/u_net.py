@@ -18,7 +18,7 @@ class DoubleConv(nn.Module):
         )
 
     def forward(self, x):
-        x = self.conv(x)
+        x = self.conv(x.type(torch.FloatTensor))
         return x
 
 

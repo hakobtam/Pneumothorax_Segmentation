@@ -2,6 +2,9 @@ import torch
 
 
 def calculate_accuracy(x, y):
+    x = x.squeeze(dim=1)
+    y = y.squeeze(dim=1)
+
     zero_matrix = torch.zeros(x.shape)
     one_matrix = torch.ones(x.shape)
     x = torch.where(x > 0.5, one_matrix, zero_matrix)
@@ -11,7 +14,8 @@ def calculate_accuracy(x, y):
     x_union_y = torch.sum(torch.where(x + y > 0, one_matrix, zero_matrix), dim=1)
     x_intersection_y = (count_x + count_y - x_union_y) / 2
     acc = 2 * torch.div(x_intersection_y, count_x + count_y)
-
+    zero_acc = torch.zeros(acc.shape)
+    acc = torch.where(torch.isnan(acc), zero_acc, acc)
     return torch.mean(acc)
 
 
@@ -20,16 +24,18 @@ def train_model(model, optimizer, data, loss_fn, epoch):
     total_epoch_acc = 0
     steps = 0
 
-    model.cuda()
+    # model.cuda()
     model.train()
 
     for idx, batch in enumerate(data):
         inputs = batch["img"]
+        inputs = inputs.unsqueeze(1)
         target = batch["mask"]
-        target = torch.autograd.Variable(target).long()
-        if torch.cuda.is_available():
-            inputs = inputs.cuda()
-            target = target.cuda()
+        target = target.unsqueeze(0)
+        target = torch.autograd.Variable(target)
+        # if torch.cuda.is_available():
+            # inputs = inputs.cuda()
+            # target = target.cuda()
         optimizer.zero_grad()
         prediction = model(inputs)
         loss = loss_fn(prediction, target)

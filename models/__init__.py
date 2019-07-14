@@ -1,3 +1,3 @@
 
 
-from ..models.u_net import UNet
+from models.u_net import UNet

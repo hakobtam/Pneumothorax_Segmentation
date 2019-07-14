@@ -12,7 +12,7 @@ class PneumothoraxDataset(Dataset):
         self.mask_csv_path = mask_csv_path
 
         self.mask_df = pd.read_csv(self.mask_csv_path)
-        self.masks = {row["ImageId"]: row["EncodedPixels"] for row in self.mask_df.to_dict('records')}
+        self.masks = {row["ImageId"]: row[" EncodedPixels"] for row in self.mask_df.to_dict('records')}
 
         self.dcm_images_names = os.listdir(self.dcm_images_dir)
 
@@ -33,7 +33,7 @@ class PneumothoraxDataset(Dataset):
 
         result = {"img": data.pixel_array, "patient_id": data.PatientID, "age": data.PatientAge, "sex": data.PatientSex,
                   "modality": data.Modality, "body_part": data.BodyPartExamined, "position": data.ViewPosition,
-                  "mask": self.rle2mask(self.masks[img_name], shape_1, shape_2)}
+                  "mask": self.rle2mask(self.masks[img_name.replace(".dcm", "")], shape_1, shape_2)}
 
         return result
 
@@ -53,6 +53,35 @@ class PneumothoraxDataset(Dataset):
             current_position += lengths[index]
 
         return mask.reshape(width, height)
+
+    @staticmethod
+    def mask2rle(img, width, height):
+        rle = []
+        lastColor = 0
+        currentPixel = 0
+        runStart = -1
+        runLength = 0
+
+        for x in range(width):
+            for y in range(height):
+                currentColor = img[x][y]
+                if currentColor != lastColor:
+                    if currentColor == 255:
+                        runStart = currentPixel
+                        runLength = 1
+                    else:
+                        rle.append(str(runStart))
+                        rle.append(str(runLength))
+                        runStart = -1
+                        runLength = 0
+                        currentPixel = 0
+                elif runStart > -1:
+                    runLength += 1
+                lastColor = currentColor
+                currentPixel += 1
+
+        return " ".join(rle)
+
 
 
 
