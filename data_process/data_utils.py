@@ -1,3 +1,4 @@
+# -*- coding: future_fstrings -*-
 import cv2
 import random
 
