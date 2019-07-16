@@ -1,4 +1,5 @@
 import torch
+from Pneumothorax_Segmentation.data_processor.pneumothorax_dataset import PneumothoraxDataset
 
 
 def calculate_accuracy(x, y):
@@ -31,7 +32,7 @@ def train_model(model, optimizer, data, loss_fn, epoch):
         inputs = batch["img"]
         inputs = inputs.unsqueeze(1)
         target = batch["mask"]
-        target = target.unsqueeze(0)
+        # target = target.unsqueeze(0)
         target = torch.autograd.Variable(target)
         # if torch.cuda.is_available():
             # inputs = inputs.cuda()
@@ -44,7 +45,7 @@ def train_model(model, optimizer, data, loss_fn, epoch):
         optimizer.step()
         steps += 1
 
-        if steps % 100 == 0:
+        if steps % 1 == 0:
             print(f'Epoch: {epoch + 1}, Idx: {idx + 1}, Training Loss: {loss.item():.4f}, '
                   f'Training Accuracy: {acc.item(): .2f}%')
 

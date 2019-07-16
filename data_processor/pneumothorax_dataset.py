@@ -34,8 +34,14 @@ class PneumothoraxDataset(Dataset):
         shape_1 = data.Rows
         shape_2 = data.Columns
         img = PIL.Image.fromarray(data.pixel_array).resize((self.reshape, self.reshape))
-        mask = PIL.Image.fromarray(self.rle2mask(self.masks[img_name.replace(".dcm", "")],
-                                                 shape_1, shape_2)).resize((self.reshape, self.reshape))
+        img = np.array(img)
+        if img_name.replace(".dcm", "") in self.masks:
+            mask = PIL.Image.fromarray(self.rle2mask(self.masks[img_name.replace(".dcm", "")], shape_1,
+                                                     shape_2)).resize((self.reshape, self.reshape))
+        else:
+            mask = np.zeros((self.reshape, self.reshape))
+
+        mask = np.array(mask)
 
         result = {"img": img, "patient_id": data.PatientID, "age": data.PatientAge, "sex": data.PatientSex,
                   "modality": data.Modality, "body_part": data.BodyPartExamined, "position": data.ViewPosition,
