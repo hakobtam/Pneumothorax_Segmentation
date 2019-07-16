@@ -51,15 +51,15 @@ class SIIMDataset(Dataset):
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
 
             features_df = pd.read_csv(self.root + '/train_features.csv')
-            for _, row in features_df.iterrows():
-                self.features_dict[row['ImeageId']] = row.to_dict()
+            for row in features_df.to_dict('records'):
+                self.features_dict[row['ImeageId']] = row
         
         else:
             self.img_dir = self.root + '/test' + suff
             features_df = pd.read_csv(self.root + '/test_features.csv')
             self.img_list = np.array(features_df['ImageId'])
-            for _, row in features_df.iterrows():
-                self.features_dict[row['ImeageId']] = row.to_dict()
+            for row in features_df.to_dict('records'):
+                self.features_dict[row['ImeageId']] = row
 
     def __getitem__(self, index):
         
