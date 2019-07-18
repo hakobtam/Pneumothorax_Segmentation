@@ -25,7 +25,7 @@ def data_filter(root, data_ids, p_keep):
 
 class SIIMDataset(Dataset):
 
-    def __init__(self, root='../input/data', transform=None, subset='train',
+    def __init__(self, root='../input/data', transform=None, subset='train', img_size=1024,
                 folds_dir='./splits/10folds', fold_id=0, prob_keep=None):
         
         assert transform is not None
@@ -41,7 +41,7 @@ class SIIMDataset(Dataset):
         self.features_dict = {}
         self.img_dir, self.label_dir = None, None
         self.img_list = []
-        self.suff = '_1024'
+        self.suff = f'_{img_size}'
         
         if self.subset in ['train', 'valid']:
             self.img_dir = self.root + '/train' + self.suff

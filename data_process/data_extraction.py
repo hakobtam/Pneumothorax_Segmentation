@@ -6,6 +6,7 @@ import os
 import sys
 sys.path.append('../')
 import PIL
+import cv2
 import glob
 from tqdm import tqdm
 
@@ -46,7 +47,8 @@ def dcm2png(SZ, dataset):
     files = glob.glob(os.path.join(inp_path, '**', '*.dcm'), recursive=True)
     for f in tqdm(files):
         dcm = pydicom.read_file(str(f)).pixel_array
-        PIL.Image.fromarray(dcm).resize((SZ,SZ)).save(f'{out_path}/{os.path.basename(f)[:-4]}.png')
+        img = cv2.resize(dcm, (SZ, SZ), interpolation=Interpolation) if SZ != 1024 else dcm
+        cv2.imwrite(f'{out_path}/{os.path.basename(f)[:-4]}.png', img)
 
 def masks2png(SZ):
     out_path = f'../input/data/train_mask_{SZ}'
@@ -62,13 +64,17 @@ def masks2png(SZ):
                 m = np.zeros((1024, 1024)).astype(np.uint8).T
             else:
                 m = rle2mask(enc, 1024, 1024).astype(np.uint8).T
-            PIL.Image.fromarray(m).resize((SZ,SZ)).save(f'{out_path}/{name}.png')
+            
+            img = cv2.resize(dcm, (SZ, SZ), interpolation=Interpolation) if SZ != 1024 else dcm
+            cv2.imwrite(f'{out_path}/{name}.png', img)
         else:
             m = np.array([rle2mask(e, 1024, 1024).astype(np.uint8) for e in enc.values])
             m = m.sum(0).astype(np.uint8).T
-            PIL.Image.fromarray(m).resize((SZ,SZ)).save(f'{out_path}/{name.values[0]}.png')
+            img = cv2.resize(dcm, (SZ, SZ), interpolation=Interpolation) if SZ != 1024 else dcm
+            cv2.imwrite(f'{out_path}/{name.values[0]}.png', img)
 
 rle_df = pd.read_csv('../input/train-rle.csv')
+Interpolation = cv2.INTER_AREA # cv2.INTER_NEAREST, cv2.INTER_CUBIC, cv2.INTER_LANCZOS4
 
 for SZ in [64, 128, 256, 512, 1024]:
     print(f'Converting data for train{SZ}')
@@ -86,7 +92,8 @@ for SZ in [64, 128, 256, 512, 1024]:
     missing_masks = set(train_images) - set(train_masks)
     for name in tqdm(missing_masks):
         m = np.zeros((1024, 1024)).astype(np.uint8).T
-        PIL.Image.fromarray(m).resize((SZ,SZ)).save(f'../input/data/train_mask_{SZ}/{name}')
+        img = cv2.resize(m, (SZ, SZ), interpolation=Interpolation) if SZ != 1024 else m
+        cv2.imwrite(f'../input/data/train_mask_{SZ}/{name}', img)
 
 print('Converting data remaining features for train')
 dcm2csv('train')
