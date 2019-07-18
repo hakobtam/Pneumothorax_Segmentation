@@ -25,9 +25,10 @@ def data_filter(root, data_ids, p_keep):
 
 class SIIMDataset(Dataset):
 
-    def __init__(self, root='../input/data', transform=None, subset='train', image_size=512, 
+    def __init__(self, root='../input/data', transform=None, subset='train',
                 folds_dir='./splits/10folds', fold_id=0, prob_keep=None):
         
+        assert transform is not None
         assert subset in ['train', 'valid', 'test'], 'Unknown subset: {}'.format(subset)
         num_folds = len(glob.glob(folds_dir + '/*'))
         assert num_folds % 2 == 0
@@ -40,22 +41,22 @@ class SIIMDataset(Dataset):
         self.features_dict = {}
         self.img_dir, self.label_dir = None, None
         self.img_list = []
+        self.suff = '_1024'
         
         if self.subset in ['train', 'valid']:
-            suff = '_{}'.format(image_size)
-            self.img_dir = self.root + '/train' + suff
-            self.label_dir = self.root + '/train_mask' + suff
+            self.img_dir = self.root + '/train' + self.suff
+            self.label_dir = self.root + '/train_mask' + self.suff
             csv_path = folds_dir + f'/fold{fold_id}_{self.subset}.csv'
             self.img_list = np.array(pd.read_csv(csv_path)['Folds'])
             if prob_keep is not None:
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
-
+                
             features_df = pd.read_csv(self.root + '/train_features.csv')
             for row in features_df.to_dict('records'):
                 self.features_dict[row['ImeageId']] = row
         
         else:
-            self.img_dir = self.root + '/test' + suff
+            self.img_dir = self.root + '/test' + self.suff
             features_df = pd.read_csv(self.root + '/test_features.csv')
             self.img_list = np.array(features_df['ImageId'])
             for row in features_df.to_dict('records'):
