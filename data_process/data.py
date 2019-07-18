@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 import random
 import glob
 import numpy as np
@@ -18,7 +17,7 @@ from data_process.data_utils import *
 def data_filter(root, data_ids, p_keep):
     filtered_ids = []
     for mask_id in data_ids:
-        mask = cv2.imread(root + f'/{mask_id}.png', 0)
+        mask = cv2.imread(root + '/{}.png'.format(mask_id), 0)
         if np.sum(mask > 0) > 0 or np.random.rand() < p_keep:
             filtered_ids.append(mask_id)
     return np.array(filtered_ids)
@@ -41,12 +40,12 @@ class SIIMDataset(Dataset):
         self.features_dict = {}
         self.img_dir, self.label_dir = None, None
         self.img_list = []
-        self.suff = f'_{img_size}'
+        self.suff = '_{}'.format(img_size)
         
         if self.subset in ['train', 'valid']:
             self.img_dir = self.root + '/train' + self.suff
             self.label_dir = self.root + '/train_mask' + self.suff
-            csv_path = folds_dir + f'/fold{fold_id}_{self.subset}.csv'
+            csv_path = folds_dir + '/fold{}_{}.csv'.format(fold_id, self.subset)
             self.img_list = np.array(pd.read_csv(csv_path)['Folds'])
             if prob_keep is not None:
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
@@ -66,8 +65,8 @@ class SIIMDataset(Dataset):
         
         # load image and labels
         img_id = self.img_list[index]
-        img = cv2.imread(self.img_dir + f'/{img_id}.png', 0)
-        target =cv2.imread(self.label_dir + f'/{img_id}.png', 0) if not self.subset == 'test' else None
+        img = cv2.imread(self.img_dir + '/{}.png'.format(img_id), 0)
+        target =cv2.imread(self.label_dir + '/{}.png'.format(img_id), 0) if not self.subset == 'test' else None
 
         # apply transforms to both
         if target is not None:

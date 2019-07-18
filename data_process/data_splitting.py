@@ -1,4 +1,3 @@
-# -*- coding: future_fstrings -*-
 import numpy as np
 import pandas as pd
 import os
@@ -10,8 +9,8 @@ from sklearn.utils import resample
 
 
 def random_split(data_dir, n_folds, seed=42):
-    print(f'Generating random {n_folds} fold splits')
-    out_path = f'data_process/splits/{n_folds}folds'
+    print('Generating random {} fold splits'.format(n_folds))
+    out_path = 'data_process/splits/{}folds'.format(n_folds)
     os.makedirs(out_path, exist_ok=True)
 
     files = glob.glob(os.path.join(data_dir, '**', '*.png'), recursive=True)
@@ -21,8 +20,8 @@ def random_split(data_dir, n_folds, seed=42):
     for i, (tr_ids, val_ids) in enumerate(kf.split(np.arange(len(filenames)))):
         tr_fold_dict = {'Folds': filenames[tr_ids]}
         val_fold_dict = {'Folds': filenames[val_ids]}
-        pd.DataFrame(tr_fold_dict).to_csv(f'{out_path}/fold{i}_train.csv')
-        pd.DataFrame(val_fold_dict).to_csv(f'{out_path}/fold{i}_valid.csv')
+        pd.DataFrame(tr_fold_dict).to_csv('{}/fold{}_train.csv'.format(out_path, i))
+        pd.DataFrame(val_fold_dict).to_csv('{}/fold{}_valid.csv'.format(out_path, i))
 
 def stratified_split(data_dir, n_folds, rs):
     #TODO
