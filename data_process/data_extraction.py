@@ -74,7 +74,7 @@ def masks2png(SZ):
             cv2.imwrite(f'{out_path}/{name.values[0]}.png', img)
 
 rle_df = pd.read_csv('../input/train-rle.csv')
-Interpolation = cv2.INTER_AREA # cv2.INTER_NEAREST, cv2.INTER_CUBIC, cv2.INTER_LANCZOS4
+Interpolation = cv2.INTER_LINEAR # cv2.INTER_AREA, cv2.INTER_CUBIC, cv2.INTER_LANCZOS4
 
 for SZ in [64, 128, 256, 512, 1024]:
     print(f'Converting data for train{SZ}')
