@@ -6,6 +6,11 @@ import random
 from models import UNet
 from data_process import SIIMDataset
 
+
+# TODO: add transformers
+# TODO: add LovaSz-softmax loss
+# TODO: change accuracy's calculation
+
 epochs = 10
 batch_size = 32
 learning_rate = 0.00001
