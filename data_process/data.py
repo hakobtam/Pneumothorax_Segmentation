@@ -5,6 +5,7 @@ import sys
 import torch
 import cv2
 from torch.utils.data import Dataset
+import numpy as np
 
 from data_process.data_utils import *
 
@@ -22,7 +23,7 @@ def data_filter(root, data_ids, p_keep):
 
 class SIIMDataset(Dataset):
     def __init__(self, root='data_process/input/data', transform=None, subset='train', image_size=512,
-                folds_dir='data_process/splits/10folds', fold_id=0, prob_keep=None):
+                folds_dir='data_process/splits/10folds', fold_id=0, prob_keep=None, coord_conv=True):
         """
 
         :param root: string -- the data directory
@@ -45,6 +46,10 @@ class SIIMDataset(Dataset):
         self.features_dict = {}
         self.img_dir, self.label_dir = None, None
         self.img_list = []
+        self.coord_conv = coord_conv
+
+        self.coord_vec_row = np.array([[ii] * image_size for ii in range(image_size)])
+        self.coord_vec_column = np.array([list(range(image_size)) for _ in range(image_size)])
 
         suff = '_{}'.format(image_size)
         if self.subset in ['train', 'valid']:
@@ -60,8 +65,8 @@ class SIIMDataset(Dataset):
                 self.features_dict[row['ImeageId']] = row.to_dict()
         
         else:
-            self.img_dir = self.root + '/test' + suff
-            features_df = pd.read_csv(self.root + '/test_features.csv')
+            self.img_dir = os.path.join(self.root, 'test' + suff)
+            features_df = pd.read_csv(os.path.join(self.root, 'test_features.csv'))
             self.img_list = np.array(features_df['ImageId'])
             for _, row in features_df.iterrows():
                 self.features_dict[row['ImeageId']] = row.to_dict()
@@ -78,6 +83,9 @@ class SIIMDataset(Dataset):
             img, target = self.transform({'input': img, 'mask': target}).values()
         else:
             img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
+
+        if self.coord_conv:
+            img = np.concatenate((img, self.coord_vec_row, self.coord_vec_column), axis=0)
 
         if target is not None:
             assert target.max() == 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())

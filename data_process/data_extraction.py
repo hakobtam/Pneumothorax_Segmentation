@@ -2,12 +2,11 @@ import pydicom
 import pandas as pd
 import numpy as np
 import os
-import sys
 import PIL
 import glob
 from tqdm import tqdm
 
-from data_process.data_utils import rle2mask, mask2rle
+from data_process.data_utils import rle2mask
 
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -24,9 +23,10 @@ def dcm2csv(dataset):
                 'ImgSize': [],
                 'PixelSpacing': []
               }
-    inp_path = os.path.join(dir_path, 'dicom-images-{0}'.format(dataset))
+    inp_path = os.path.join(dir_path, 'images-{0}'.format(dataset))
     out_path = os.path.join(dir_path, 'data')
-    files = glob.glob(os.path.join(inp_path, '**', '*.dcm'), recursive=True)
+    # files = glob.glob(os.path.join(inp_path, '**', '*.dcm'), recursive=True)
+    files = [os.path.join(inp_path, file) for file in os.listdir(inp_path)]
     for file_path in tqdm(files):
         if os.path.isfile(file_path):
             data = pydicom.dcmread(file_path)
@@ -45,10 +45,11 @@ def dcm2csv(dataset):
 
 
 def dcm2png(SZ, dataset):
-    inp_path = os.path.join(dir_path, 'dicom-images-{0}'.format(dataset))
+    inp_path = os.path.join(dir_path, 'images-{0}'.format(dataset))
     out_path = os.path.join(dir_path, 'data', '{0}_{1}'.format(dataset, SZ))
     os.makedirs(out_path, exist_ok=True)
-    files = glob.glob(os.path.join(inp_path, '**', '*.dcm'), recursive=True)
+    # files = glob.glob(os.path.join(inp_path, '**', '*.dcm'), recursive=True)
+    files = [os.path.join(inp_path, file) for file in os.listdir(inp_path)]
     for f in tqdm(files):
         if os.path.isfile(f):
             dcm = pydicom.dcmread(f).pixel_array
