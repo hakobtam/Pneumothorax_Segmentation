@@ -62,14 +62,20 @@ class SIIMDataset(Dataset):
 
             features_df = pd.read_csv(os.path.join(self.root, 'train_features.csv'))
             for _, row in features_df.iterrows():
-                self.features_dict[row['ImeageId']] = row.to_dict()
+                try:
+                    self.features_dict[row['ImeageId']] = row.to_dict()
+                except Exception as e:
+                    pass
         
         else:
             self.img_dir = os.path.join(self.root, 'test' + suff)
             features_df = pd.read_csv(os.path.join(self.root, 'test_features.csv'))
             self.img_list = np.array(features_df['ImageId'])
             for _, row in features_df.iterrows():
-                self.features_dict[row['ImeageId']] = row.to_dict()
+                try:
+                    self.features_dict[row['ImeageId']] = row.to_dict()
+                except Exception as e:
+                    pass
 
     def __getitem__(self, index):
         

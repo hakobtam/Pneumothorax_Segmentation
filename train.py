@@ -5,11 +5,14 @@ import random
 
 from models import UNet
 from data_process import SIIMDataset
+from torchvision import transforms
+
+from data_process import PrepareData, HWCtoCHW, mask2rle
 
 
-# TODO: add transformers
-# TODO: add LovaSz-softmax loss
-# TODO: change accuracy's calculation
+# TODO: add transformers, -- done, but
+# TODO: add LovaSz-softmax loss  -- done, but need bug fixing
+# TODO: change accuracy's calculation -- not done
 
 epochs = 10
 batch_size = 32
@@ -17,23 +20,13 @@ learning_rate = 0.00001
 shuffle = True
 num_workers = 1
 
-model = UNet(1, 1)
+model = UNet(3, 1)
 optimizer = Adam(params=model.parameters(), lr=learning_rate)
 
 
 def rmse(y, y_hat):
     """Compute root mean squared error"""
     return torch.sqrt(torch.mean((y.double() - y_hat.double()).pow(2)))
-
-
-def rle_loss(y, y_hat):
-
-    def array2rle(arr):
-        pass
-
-
-
-loss = rmse
 
 
 def calculate_accuracy(x, y):
@@ -61,8 +54,8 @@ def train_model(model, optimizer, data_idx, loss_fn, epoch):
 
     # model.cuda()
     model.train()
-
-    data_set = SIIMDataset(fold_id=data_idx)
+    transform = transforms.Compose([PrepareData(), HWCtoCHW])
+    data_set = SIIMDataset(fold_id=data_idx, transform=transform)
     data_loader = DataLoader(data_set, batch_size=32, shuffle=True)
     for idx, batch in enumerate(data_loader):
         inputs = batch["input"]
@@ -91,11 +84,15 @@ def train_model(model, optimizer, data_idx, loss_fn, epoch):
     return total_epoch_loss / len(data_loader), total_epoch_acc / len(data_loader)
 
 
-def eval_model(model, val_data, loss_fn):
+def eval_model(model, val_data_idx, loss_fn):
     model.eval()
+    transform = transforms.Compose([PrepareData(), HWCtoCHW])
+    data_set = SIIMDataset(fold_id=val_data_idx, transform=transform)
+    data_loader = DataLoader(data_set, batch_size=len(data_set), shuffle=True)
     with torch.no_grad():
-        inputs = val_data["img"]
-        target = val_data["mask"]
+        data = next(data_loader)
+        inputs = data["input"]
+        target = data["target"]
         target = torch.autograd.Variable(target).long()
         if torch.cuda.is_available():
             inputs = inputs.cuda()
@@ -104,13 +101,17 @@ def eval_model(model, val_data, loss_fn):
         loss = loss_fn(prediction, target)
         acc = calculate_accuracy(x=prediction, y=target)
 
+        print(f'Idx: {val_data_idx}', f'Test loss: {loss.item()}', f'Test accuracy: {acc.item()}')
+
     return loss.item(), acc.item()
 
 
 if __name__ == '__main__':
+    loss = rmse
     for e in range(epochs):
         val_idx = random.randint(0, 9)
         range_list = list(range(0, 10))
         range_list.remove(val_idx)
         for idx in range_list:
             train_model(model=model, optimizer=optimizer, data_idx=idx, loss_fn=loss, epoch=e)
+            eval_model(model=model, val_data_idx=idx, loss_fn=loss)
