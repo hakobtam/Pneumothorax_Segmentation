@@ -1,1 +1,1 @@
-from data import SIIMDataset
+from data_process.data import SIIMDataset

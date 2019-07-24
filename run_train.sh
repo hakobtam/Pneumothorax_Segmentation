@@ -13,7 +13,6 @@ python train.py \
 --optim adam \
 --grad_accumulation 1 \
 --lr 1e-2 \
-#--lr_scheduler step \
 --epochs 100 \
 --seed 27 \
 --debug

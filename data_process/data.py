@@ -76,7 +76,7 @@ class SIIMDataset(Dataset):
             img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
 
         if target is not None:
-            assert target.max() == 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
+            assert target.max() <= 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
             target[(target > 0) & (target < 1.0)] = 0
             assert ((target > 0) & (target < 1.0)).sum() == 0
             return {'input': torch.Tensor(img), 'target': torch.Tensor(target), 'params': self.features_dict[img_id]}

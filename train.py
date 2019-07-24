@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from tensorboardX import SummaryWriter
 import torch
+from torch.nn import functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, ConcatDataset
 from torchvision.transforms import *
@@ -30,14 +31,14 @@ parser.add_argument("--num_filters", type=int, default=64, help='NN model number
 parser.add_argument("--batch_size", type=int, default=32, help='batch size')
 parser.add_argument("--loss", type=str, default='Loss', help='loss function')
 parser.add_argument("--wd", type=float, default=1e-4, help='weight decay')
-parser.add_argument("--optim", type=float, default='adam', help='optimization algorithm')
+parser.add_argument("--optim", type=str, default='adam', help='optimization algorithm')
 parser.add_argument('--grad_accumulation', type=int, default=1,
                     help='accumulate gradients over number of batches')
 parser.add_argument("--lr", type=float, default=1e-2, help='learning rate for optimization')
 #parser.add_argument("--lr_scheduler", type=float, default='step', help='method to adjust learning rate')
 parser.add_argument("--epochs", type=int, default=350, help='number of epochs')
 parser.add_argument("--debug", action='store_true', help='write debug images')
-parser.add_argument("--resume", type=str, help='checkpoint file to resume')
+#parser.add_argument("--resume", type=str, help='checkpoint file to resume')
 current_time = datetime.now().strftime('%b%d_%H-%M-%S')
 default_log_dir = os.path.join('runs', current_time)
 parser.add_argument('--log_dir', type=str, default=default_log_dir, help='location to save logs and checkpoints')
@@ -51,7 +52,7 @@ train_transform = Compose([PrepareData(),
                            HWCtoCHW()])
 valid_transform = Compose([PrepareData(),
                            HWCtoCHW()])
-
+#print(sys.argv)
 os.makedirs(args.log_dir, exist_ok=True)
 with open(os.path.join(args.log_dir, 'command.sh'), 'w') as f:
     f.write(' '.join(sys.argv))
@@ -122,7 +123,7 @@ def train(epoch, loss_fn):
 
         # logits = logits.squeeze(1)
         # targets = targets.squeeze(1)
-        loss = loss_fn(torch.nn.Sigmoid(logits), targets)
+        loss = loss_fn(torch.sigmoid(logits), targets)
 
         # accumulate gradients
         if it == 0:
@@ -192,7 +193,7 @@ def validation(epoch, loss_fn):
 
         # logits = logits.squeeze(1)
         # targets = targets.squeeze(1)
-        loss = loss_fn(torch.nn.Sigmoid(logits), targets)
+        loss = loss_fn(torch.sigmoid(logits), targets)
 
         # statistics
         it += 1
@@ -259,35 +260,36 @@ def validation(epoch, loss_fn):
     return epoch_loss, epoch_iou, epoch_dice, epoch_acc
 
 print("training {}...".format(args.model))
-pbar_epoch = tqdm(np.arange(start_epoch, args.max_epochs))
+#pbar_epoch = tqdm(np.arange(start_epoch, args.epochs))
 
-for epoch in np.arange(start_epoch, args.max_epochs):
+for epoch in np.arange(start_epoch, args.epochs):
 
-    tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc = train(epoch)
-    val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc = validation(epoch)
+    tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc = train(epoch, loss_fn)
+    val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc = validation(epoch, loss_fn)
     state = {
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
-        'best_loss': epoch_loss,
-        'best_metric': epoch_loss,
-        'best_accuracy': epoch_loss,
+        'loss': val_epoch_loss,
+        'dice': val_epoch_dice,
+        'iou': val_epoch_iou,
+        'acc': val_epoch_acc,
     }
     if val_epoch_loss < best_loss:
         print ("Model Loss improved!!! {} -> {}".format(best_loss, val_epoch_loss))
         best_loss = val_epoch_loss
-        utils.save_checkpoint(dir=checkpoint_dir, model=args.model , tag='best-loss', epoch=epoch)
+        utils.save_checkpoint(dir=checkpoint_dir, model=args.model , tag='best-loss', epoch=epoch, save_dict=state)
     if val_epoch_dice > best_dice:
         print ("Model Dice improved!!! {} -> {}".format(best_dice, val_epoch_dice))
         best_dice = val_epoch_dice
-        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-dice', epoch=epoch)
+        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-dice', epoch=epoch, save_dict=state)
     if val_epoch_iou > best_iou:
         print ("Model IoU improved!!! {} -> {}".format(best_iou, val_epoch_iou))
         best_iou = val_epoch_iou
-        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch)
+        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch, save_dict=state)
     if val_epoch_acc > best_acc:
         print ("Model IoU improved!!! {} -> {}".format(best_acc, val_epoch_acc))
         best_acc= val_epoch_acc
-        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch)
+        utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch, save_dict=state)
 
 
 
@@ -299,7 +301,7 @@ for epoch in np.arange(start_epoch, args.max_epochs):
     #                         'best val': '%.03f/%.03f/%.03f'.format(best_loss, best_dice, best_iou, best_acc)},
     #                        refresh=False)
 
-utils.save_checkpoint('last')
+#utils.save_checkpoint('last')
 print("best valid loss: {:.05f}, best valid dice: {:.03f}, best valid iou: {:.03f}, best valid accuracy: {:.03f},".\
      format(best_loss, best_dice, best_iou, best_acc))
 
