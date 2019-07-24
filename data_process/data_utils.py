@@ -56,8 +56,8 @@ class PrepareData(object):
     def __call__(self, data):
         img = data['input']
         mask = data['mask']
-        if len(img.shape) == 2:
-            img = np.expand_dims(img, axis=-1)
+        # if len(img.shape) == 2:
+        #     img = np.expand_dims(img, axis=-1)
         img = img / 255
         mask = mask / 255
 
@@ -331,6 +331,7 @@ class HorizontalShear(object):
 
 
 class HWCtoCHW(object):
+
     def __call__(self, data):
         data['input'] = data['input'].transpose((2, 0, 1))
         return data

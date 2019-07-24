@@ -48,8 +48,8 @@ class SIIMDataset(Dataset):
         self.img_list = []
         self.coord_conv = coord_conv
 
-        self.coord_vec_row = np.array([[ii] * image_size for ii in range(image_size)])
-        self.coord_vec_column = np.array([list(range(image_size)) for _ in range(image_size)])
+        self.coord_vec_row = np.expand_dims(np.array([[ii] * image_size for ii in range(image_size)]), axis=0)
+        self.coord_vec_column = np.expand_dims(np.array([list(range(image_size)) for _ in range(image_size)]), axis=0)
 
         suff = '_{}'.format(image_size)
         if self.subset in ['train', 'valid']:
@@ -61,11 +61,9 @@ class SIIMDataset(Dataset):
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
 
             features_df = pd.read_csv(os.path.join(self.root, 'train_features.csv'))
-            for _, row in features_df.iterrows():
-                try:
-                    self.features_dict[row['ImeageId']] = row.to_dict()
-                except Exception as e:
-                    pass
+            features_df = features_df.to_dict('records')
+            for row in features_df:
+                self.features_dict[row['ImageId']] = row
         
         else:
             self.img_dir = os.path.join(self.root, 'test' + suff)
@@ -91,12 +89,12 @@ class SIIMDataset(Dataset):
             img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
 
         if self.coord_conv:
-            img = np.concatenate((img, self.coord_vec_row, self.coord_vec_column), axis=0)
+            img = np.concatenate((np.expand_dims(img, axis=0), self.coord_vec_row, self.coord_vec_column), axis=0)
 
         if target is not None:
-            assert target.max() == 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
+            # assert target.max() == 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
             target[(target > 0) & (target < 1.0)] = 0
-            assert ((target > 0) & (target < 1.0)).sum() == 0
+            # assert ((target > 0) & (target < 1.0)).sum() == 0
             return {'input': torch.Tensor(img), 'target': torch.Tensor(target), 'params': self.features_dict[img_id]}
         else:
             return {'input': torch.Tensor(img), 'params': self.features_dict[img_id]}

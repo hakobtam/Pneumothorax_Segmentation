@@ -54,12 +54,11 @@ def train_model(model, optimizer, data_idx, loss_fn, epoch):
 
     # model.cuda()
     model.train()
-    transform = transforms.Compose([PrepareData(), HWCtoCHW])
+    transform = transforms.Compose([PrepareData()])
     data_set = SIIMDataset(fold_id=data_idx, transform=transform)
     data_loader = DataLoader(data_set, batch_size=32, shuffle=True)
     for idx, batch in enumerate(data_loader):
         inputs = batch["input"]
-        inputs = inputs.unsqueeze(1)
         target = batch["target"]
         # target = target.unsqueeze(0)
         target = torch.autograd.Variable(target)
