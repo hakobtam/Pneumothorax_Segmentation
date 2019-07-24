@@ -9,19 +9,7 @@ from torchvision import transforms
 
 from data_process import PrepareData, HWCtoCHW, mask2rle
 
-
-# TODO: add transformers, -- done, but
-# TODO: add LovaSz-softmax loss  -- done, but need bug fixing
-# TODO: change accuracy's calculation -- not done
-
-epochs = 10
-batch_size = 32
-learning_rate = 0.00001
-shuffle = True
-num_workers = 1
-
-model = UNet(3, 1)
-optimizer = Adam(params=model.parameters(), lr=learning_rate)
+import argparse
 
 
 def rmse(y, y_hat):
@@ -47,7 +35,7 @@ def calculate_accuracy(x, y):
     return torch.mean(acc)
 
 
-def train_model(model, optimizer, data_idx, loss_fn, epoch):
+def train_model(model, batch_size, optimizer, data_idx, loss_fn, epoch):
     total_epoch_loss = 0
     total_epoch_acc = 0
     steps = 0
@@ -56,7 +44,7 @@ def train_model(model, optimizer, data_idx, loss_fn, epoch):
     model.train()
     transform = transforms.Compose([PrepareData()])
     data_set = SIIMDataset(fold_id=data_idx, transform=transform)
-    data_loader = DataLoader(data_set, batch_size=32, shuffle=True)
+    data_loader = DataLoader(data_set, batch_size=batch_size, shuffle=True)
     for idx, batch in enumerate(data_loader):
         inputs = batch["input"]
         target = batch["target"]
@@ -105,12 +93,29 @@ def eval_model(model, val_data_idx, loss_fn):
     return loss.item(), acc.item()
 
 
-if __name__ == '__main__':
+def train_runner(args):
+    epochs = args.epochs
+    batch_size = args.batch_szie
+    learning_rate = args.learning_rate
+    shuffle = True
+    num_workers = 1
+
+    model = UNet(3, 1)
+    optimizer = Adam(params=model.parameters(), lr=learning_rate)
     loss = rmse
     for e in range(epochs):
         val_idx = random.randint(0, 9)
         range_list = list(range(0, 10))
         range_list.remove(val_idx)
         for idx in range_list:
-            train_model(model=model, optimizer=optimizer, data_idx=idx, loss_fn=loss, epoch=e)
+            train_model(model=model, batch_size=batch_size, optimizer=optimizer, data_idx=idx, loss_fn=loss, epoch=e)
             eval_model(model=model, val_data_idx=idx, loss_fn=loss)
+
+
+if __name__ == '__main__':
+    train_parser = argparse.ArgumentParser(description='Bla bla bla Grish jan')
+    train_parser.add_argument('--epochs', type=int, help='Epochs of train', default=16, required=False)
+    train_parser.add_argument('--batch_size', type=int, help='Batch size of train', default=16, required=False)
+    train_parser.add_argument('--learning_rate', type=float, help="Learning rate of train", default=0.0001, required=False)
+    args = train_parser.parse_args()
+    train_runner(args)
