@@ -22,7 +22,7 @@ def data_filter(root, data_ids, p_keep):
 
 
 class SIIMDataset(Dataset):
-    def __init__(self, root='data_process/input/data', transform=None, subset='train', image_size=512,
+    def __init__(self, root='․․/input/data', transform=None, subset='train', image_size=512,
                 folds_dir='data_process/splits/10folds', fold_id=0, prob_keep=None, coord_conv=True):
         """
 
