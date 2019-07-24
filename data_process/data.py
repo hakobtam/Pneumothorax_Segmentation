@@ -17,16 +17,17 @@ from data_process.data_utils import *
 def data_filter(root, data_ids, p_keep):
     filtered_ids = []
     for mask_id in data_ids:
-        mask = cv2.imread(root + '/{}.png'.format(mask_id), 0)
+        mask = cv2.imread(os.path.join(root, mask_id + '.png', 0))
         if np.sum(mask > 0) > 0 or np.random.rand() < p_keep:
             filtered_ids.append(mask_id)
     return np.array(filtered_ids)
 
 class SIIMDataset(Dataset):
 
-    def __init__(self, root='../input/data', transform=None, subset='train', img_size=1024,
-                folds_dir='./splits/10folds', fold_id=0, prob_keep=None):
+    def __init__(self, root='../input/data', subset='train', transform=None, img_size=1024,
+                folds_dir='10folds', fold_id=0, prob_keep=None):
         
+        folds_dir = os.path.join('data_process/splits', folds_dir)
         assert transform is not None
         assert subset in ['train', 'valid', 'test'], 'Unknown subset: {}'.format(subset)
         num_folds = len(glob.glob(folds_dir + '/*'))
@@ -43,30 +44,30 @@ class SIIMDataset(Dataset):
         self.suff = '_{}'.format(img_size)
         
         if self.subset in ['train', 'valid']:
-            self.img_dir = self.root + '/train' + self.suff
-            self.label_dir = self.root + '/train_mask' + self.suff
-            csv_path = folds_dir + '/fold{}_{}.csv'.format(fold_id, self.subset)
+            self.img_dir = os.path.join(self.root, 'train' + self.suff)
+            self.label_dir = os.path.join(self.root, 'train_mask' + self.suff)
+            csv_path = os.path.join(folds_dir, 'fold{}_{}.csv'.format(fold_id, self.subset))
             self.img_list = np.array(pd.read_csv(csv_path)['Folds'])
             if prob_keep is not None:
                 self.img_list = data_filter(root=self.label_dir, data_ids=self.img_list, p_keep=prob_keep)
                 
-            features_df = pd.read_csv(self.root + '/train_features.csv')
+            features_df = pd.read_csv(os.path.join(self.root, 'train_features.csv'))
             for row in features_df.to_dict('records'):
-                self.features_dict[row['ImeageId']] = row
+                self.features_dict[row['ImageId']] = row
         
         else:
-            self.img_dir = self.root + '/test' + self.suff
-            features_df = pd.read_csv(self.root + '/test_features.csv')
+            self.img_dir = os.path.join(self.root, 'test' + self.suff)
+            features_df = pd.read_csv(os.path.join(self.root, 'test_features.csv'))
             self.img_list = np.array(features_df['ImageId'])
             for row in features_df.to_dict('records'):
-                self.features_dict[row['ImeageId']] = row
+                self.features_dict[row['ImageId']] = row
 
     def __getitem__(self, index):
         
         # load image and labels
         img_id = self.img_list[index]
-        img = cv2.imread(self.img_dir + '/{}.png'.format(img_id), 0)
-        target =cv2.imread(self.label_dir + '/{}.png'.format(img_id), 0) if not self.subset == 'test' else None
+        img = cv2.imread(os.path.join(self.img_dir, img_id + '.png'), 0)
+        target =cv2.imread(os.path.join(self.label_dir, img_id + '.png'), 0) if not self.subset == 'test' else None
 
         # apply transforms to both
         if target is not None:

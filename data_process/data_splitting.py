@@ -32,4 +32,4 @@ def replacement_sampling(data_dir, n_folds, rs):
     pass
 
 if __name__ == '__main__':
-        random_split('../input/data/train_256', n_folds=10, seed=32)
+    random_split('../input/data/train_256', n_folds=10, seed=32)

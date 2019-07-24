@@ -1,4 +1,4 @@
-# Used https://github.com/milesial/Pytorch-UNet for building u-net architecture
+# Code has been taken from https://github.com/milesial/Pytorch-UNet for building u-net architecture
 
 import torch
 import torch.nn as nn
@@ -57,7 +57,7 @@ class Up(nn.Module):
     def __init__(self, in_ch, out_ch, up_mode=None):
         super(Up, self).__init__()
 
-        if up_mode in not None:
+        if up_mode is not None:
             self.up = nn.Upsample(scale_factor=2, mode=up_mode, align_corners=True)
         else:
             self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, kernel_size=2, stride=2)
