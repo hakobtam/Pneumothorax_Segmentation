@@ -13,16 +13,18 @@ class Loss:
         self.dice_weight = dice_weight
 
     def __call__(self, outputs, targets):
+        assert ((outputs < 0) | (outputs > 1.0)).sum() == 0
         loss = self.nll_loss(outputs, targets)
         if self.dice_weight:
-            eps = 1e-15
+            smooth = 1e-8
+            eps = 1e-7
             dice_target = (targets == 1).float()
             dice_output = outputs
             intersection = (dice_output * dice_target).sum()
             union = dice_output.sum() + dice_target.sum() + eps
 
-            loss -= torch.log(2 * intersection / union)
-
+            loss -= self.dice_weight * torch.log(2 * (intersection+smooth) / (union+smooth))
+            
         return loss
 
 class DiceLoss(nn.Module):

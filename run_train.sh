@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 python train.py \
 --model UNet \

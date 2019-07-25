@@ -26,7 +26,7 @@ class DoubleConv(nn.Module):
             )
 
     def forward(self, x):
-        x = self.conv(x.type(torch.FloatTensor))
+        x = self.conv(x)
         return x
 
 
@@ -94,14 +94,14 @@ class UNet(nn.Module):
                     n_channels=1, 
                     n_classes=1,
                     num_filters=32,
-                    up_mode = 'biliniar',
+                    up_mode = 'bilinear',
                     batch_norm=True,
                 ):
         super(UNet, self).__init__()
         self.inc = InConv(n_channels, num_filters)
         self.down1 = Down(num_filters, num_filters * 2)
         self.down2 = Down(num_filters * 2, num_filters * 4)
-        self.down3 = Down(num_filters * 2, num_filters * 8)
+        self.down3 = Down(num_filters * 4, num_filters * 8)
         self.down4 = Down(num_filters * 8, num_filters * 8)
         self.up1 = Up(num_filters * (8 + 8), num_filters * 4, up_mode)
         self.up2 = Up(num_filters * (4 + 4), num_filters * 2, up_mode)

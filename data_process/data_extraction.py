@@ -9,7 +9,7 @@ import cv2
 import glob
 from tqdm import tqdm
 
-from data_utils import rle2mask, mask2rle
+from data_process.data_utils import rle2mask, mask2rle
 
 def remove_files():
     train_files = glob.glob('../input/dicom-images-train/**/*.dcm', recursive=True)

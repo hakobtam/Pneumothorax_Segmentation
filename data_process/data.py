@@ -25,7 +25,7 @@ def data_filter(root, data_ids, p_keep):
 class SIIMDataset(Dataset):
 
     def __init__(self, root='../input/data', subset='train', transform=None, img_size=1024,
-                folds_dir='10folds', fold_id=0, prob_keep=None):
+                folds_dir='10folds', fold_id=0, prob_keep=None, data_len=None):
         
         folds_dir = os.path.join('data_process/splits', folds_dir)
         assert transform is not None
@@ -42,6 +42,7 @@ class SIIMDataset(Dataset):
         self.img_dir, self.label_dir = None, None
         self.img_list = []
         self.suff = '_{}'.format(img_size)
+        self.data_len = data_len
         
         if self.subset in ['train', 'valid']:
             self.img_dir = os.path.join(self.root, 'train' + self.suff)
@@ -73,6 +74,7 @@ class SIIMDataset(Dataset):
         if target is not None:
             img, target = self.transform({'input': img, 'mask':target}).values()
         else:
+            print(os.path.join(self.label_dir, img_id + '.png'))
             img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
 
         if target is not None:
@@ -84,4 +86,4 @@ class SIIMDataset(Dataset):
             return {'input': torch.Tensor(img), 'params': self.features_dict[img_id]}
 
     def __len__(self):
-        return len(self.img_list)
+        return len(self.img_list) if self.data_len is None else self.data_len

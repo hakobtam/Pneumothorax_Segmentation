@@ -21,6 +21,8 @@ import utils# import set_seed, create_optimizer, choose_device, create_lr_schedu
 from data_process.data_utils import *
 from data_process import SIIMDataset
 
+from pdb import set_trace
+
 parser = argparse.ArgumentParser(description='Pneumothorax training')
 parser.add_argument("--folds_dir", type=str, default='10folds', help='dataset folds directory')
 parser.add_argument("--fold_id", type=int, default=0, help='dataset fold id to use for training')
@@ -66,17 +68,20 @@ valid_dataset = SIIMDataset(subset='valid', transform=valid_transform, img_size=
 train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size,
                               num_workers=args.num_workers, drop_last=True)
 valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=args.batch_size,
-                              num_workers=args.num_workers)
+                              num_workers=args.num_workers, drop_last=True)
 
 utils.set_seed(args.seed)
-model = getattr(models, args.model)(args.num_filters)
+#torch.backends.cudnn.benchmark = True
+model = getattr(models, args.model)(num_filters=args.num_filters)
+model.cuda()
 parameters = [p for p in model.parameters() if p.requires_grad]
 print('Number of parameters', len(parameters))
 if args.optim == 'adam':
     optimizer = torch.optim.Adam(parameters, lr=args.lr, weight_decay=args.wd)
 
+
 if args.loss == "Loss":
-    loss_fn = Loss()
+    loss_fn = Loss(0.5)
 #loss_fn = torch.nn.BCELoss()
 #lr_scheduler = create_lr_scheduler(optimizer, **vars(args))
 
@@ -100,36 +105,34 @@ os.makedirs(checkpoint_dir, exist_ok=True)
 def train(epoch, loss_fn):
     global tr_global_step, best_loss, best_iou, best_dice, best_acc, start_epoch
     writer.add_scalar('train/learning_rate', utils.get_lr(optimizer), epoch)
-    
     model.train()
     torch.set_grad_enabled(True)
     optimizer.zero_grad()
 
     running_loss, running_iou, running_dice, running_acc = 0.0, 0.0, 0.0, 0.0
     it, total = 0, 0
-
     #pbar_disable = False if epoch == start_epoch else None
     pbar = tqdm(train_dataloader, unit="images", unit_scale=train_dataloader.batch_size, desc='Train')
     for batch in pbar:
         inputs, targets = batch['input'], batch['target']
-        print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
+        #print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
         inputs = inputs.cuda()
         targets = targets.cuda()
 
         # forward
         logits = model(inputs)
-        probs = torch.sigmoid(logits).squeeze(1)
-        predictions = probs > 0.5
+        logits = logits.squeeze(1)
+        targets = targets.squeeze(1)
 
-        # logits = logits.squeeze(1)
-        # targets = targets.squeeze(1)
-        loss = loss_fn(torch.sigmoid(logits), targets)
-
+        probs = torch.sigmoid(logits)
+        loss = loss_fn(probs, targets)
+        if torch.isinf(loss):
+            set_trace()
         # accumulate gradients
         if it == 0:
             optimizer.zero_grad()
         loss.backward()
-        if it % args.gradient_accumulation == 0:
+        if it % args.grad_accumulation == 0:
             optimizer.step()
             optimizer.zero_grad()
 
@@ -142,8 +145,8 @@ def train(epoch, loss_fn):
 
         # writer.add_scalar('train/loss', loss, global_step)
         inputs_numpy = inputs.cpu().numpy()
-        targets_numpy = targets.cpu().numpy().squeeze(1)
-        probs_numpy = probs.cpu().detach().numpy().squeeze(1)
+        targets_numpy = targets.cpu().numpy()
+        probs_numpy = probs.cpu().detach().numpy()
         predictions_numpy = probs_numpy > 0.5  # predictions.cpu().numpy()
 
         running_iou += iou_score(targets_numpy, predictions_numpy).sum()
@@ -177,23 +180,21 @@ def validation(epoch, loss_fn):
     running_loss, running_iou, running_dice, running_acc = 0.0, 0.0, 0.0, 0.0
     best_batch_loss, best_batch_dice, best_batch_iou, best_batch_acc = best_loss, best_dice, best_iou, best_acc
     it, total = 0, 0
-
     #pbar_disable = False if epoch == start_epoch else None
     pbar = tqdm(valid_dataloader, unit="images", unit_scale=valid_dataloader.batch_size, desc='Valid')
     for batch in pbar:
         inputs, targets = batch['input'], batch['target']
-        print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
+        #print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
         inputs = inputs.cuda()
         targets = targets.cuda()
 
         # forward
         logits = model(inputs)
-        probs = torch.sigmoid(logits).squeeze(1)
-        predictions = probs > 0.5
+        logits = logits.squeeze(1)
+        targets = targets.squeeze(1)
 
-        # logits = logits.squeeze(1)
-        # targets = targets.squeeze(1)
-        loss = loss_fn(torch.sigmoid(logits), targets)
+        probs = torch.sigmoid(logits)
+        loss = loss_fn(probs, targets)
 
         # statistics
         it += 1
@@ -203,8 +204,8 @@ def validation(epoch, loss_fn):
         total += targets.size(0)
 
         inputs_numpy = inputs.cpu().numpy()
-        targets_numpy = targets.cpu().numpy().squeeze(1)
-        probs_numpy = probs.cpu().detach().numpy().squeeze(1)
+        targets_numpy = targets.cpu().numpy()
+        probs_numpy = probs.cpu().detach().numpy()
         predictions_numpy = probs_numpy > 0.5  # predictions.cpu().numpy()
 
         iou_array = iou_score(targets_numpy, predictions_numpy)
@@ -227,19 +228,23 @@ def validation(epoch, loss_fn):
         if visualize_output and args.debug:
             # sort samples by metric
             ind = np.argsort(dice_array)
-            images = inputs.cpu()
-            images = images[ind]
+            images = inputs[ind].cpu()
             probs = probs[ind].cpu()
-            predictions = predictions[ind].cpu()
+            predictions = (probs > 0.5).float()
             targets = targets[ind].cpu()
 
-            preds = torch.cat([probs] * 3, 1)
-            mask = torch.cat([targets.unsqueeze(1)] * 3, 1)
-            all = images.clone()
-            all[:, 0] = torch.max(images[:, 0], predictions.float())
-            all[:, 1] = torch.max(images[:, 1], targets)
-            all = torch.cat((torch.cat((all, images), 3), torch.cat((preds, mask), 3)), 2)
-            all_grid = vutils.make_grid(all, nrow=4, normalize=False, pad_value=1)
+            images=torch.cat([images] * 3, 1)
+            all1 = images.clone()
+            all1[:, 0] = torch.max(images[:, 0], probs)
+            all1[:, 2] = torch.max(images[:, 2], targets)
+            all2 = images.clone()
+            all2[:, 0] = torch.max(images[:, 0], predictions)
+            all2[:, 2] = torch.max(images[:, 2], targets)
+            masks = torch.zeros(images.shape)
+            masks[:, 0] = predictions
+            masks[:, 2] = targets
+            all = torch.cat([images, all1, all2, masks], 3)
+            all_grid = vutils.make_grid(all, nrow=1, normalize=False, pad_value=1)
             writer.add_image('valid/img-mask-pred', all_grid, val_global_step)
         # update the progress bar
         pbar.set_postfix({
@@ -274,23 +279,29 @@ for epoch in np.arange(start_epoch, args.epochs):
         'iou': val_epoch_iou,
         'acc': val_epoch_acc,
     }
+    mark = 0
     if val_epoch_loss < best_loss:
+        mark = 1
         print ("Model Loss improved!!! {} -> {}".format(best_loss, val_epoch_loss))
         best_loss = val_epoch_loss
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model , tag='best-loss', epoch=epoch, save_dict=state)
     if val_epoch_dice > best_dice:
+        mark = 1
         print ("Model Dice improved!!! {} -> {}".format(best_dice, val_epoch_dice))
         best_dice = val_epoch_dice
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-dice', epoch=epoch, save_dict=state)
     if val_epoch_iou > best_iou:
+        mark = 1
         print ("Model IoU improved!!! {} -> {}".format(best_iou, val_epoch_iou))
         best_iou = val_epoch_iou
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch, save_dict=state)
     if val_epoch_acc > best_acc:
+        mark = 1
         print ("Model IoU improved!!! {} -> {}".format(best_acc, val_epoch_acc))
         best_acc= val_epoch_acc
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch, save_dict=state)
-
+    if mark == 0:
+        print("Model didn't improved")
 
 
     # pbar_epoch.set_postfix({'lr': '{:.02e}' % utils.get_lr(optimizer),
