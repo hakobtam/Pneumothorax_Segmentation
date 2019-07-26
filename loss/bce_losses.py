@@ -28,7 +28,7 @@ class Loss:
         return loss
 
 class DiceLoss(nn.Module):
-    def __init__(self, smooth=0, eps=1e-7):
+    def __init__(self, smooth=1e-13, eps=1e-7):
         super(DiceLoss, self).__init__()
         self.smooth = smooth
         self.eps = eps
@@ -78,80 +78,92 @@ def multiclass_dice_loss(output, target, smooth=0, activation='softmax'):
     return loss / num_classes
 
 # Code has been taken from https://github.com/Hsuxu/Loss_ToolBox-PyTorch
-class FocalLoss(nn.Module):
-    """
-    This is a implementation of Focal Loss with smooth label cross entropy supported which is proposed in
-    'Focal Loss for Dense Object Detection. (https://arxiv.org/abs/1708.02002)'
-        Focal_Loss= -1*alpha*(1-pt)*log(pt)
-    :param num_class:
-    :param alpha: (tensor) 3D or 4D the scalar factor for this criterion
-    :param gamma: (float,double) gamma > 0 reduces the relative loss for well-classified examples (p>0.5) putting more
-                    focus on hard misclassified example
-    :param smooth: (float,double) smooth value when cross entropy
-    :param balance_index: (int) balance class index, should be specific when alpha is float
-    :param size_average: (bool, optional) By default, the losses are averaged over each loss element in the batch.
-    """
-
-    def __init__(self, num_class, alpha=None, gamma=2, balance_index=-1, smooth=None, size_average=True):
-        super(FocalLoss, self).__init__()
-        self.num_class = num_class
+class FocalLoss1(nn.Module):
+    def __init__(self, alpha=1, gamma=2, reduce=True):
+        super(FocalLoss1, self).__init__()
         self.alpha = alpha
         self.gamma = gamma
-        self.smooth = smooth
-        self.size_average = size_average
+        self.reduce = reduce
 
-        if self.alpha is None:
-            self.alpha = torch.ones(self.num_class, 1)
-        elif isinstance(self.alpha, (list, np.ndarray)):
-            assert len(self.alpha) == self.num_class
-            self.alpha = torch.FloatTensor(alpha).view(self.num_class, 1)
-            self.alpha = self.alpha / self.alpha.sum()
-        elif isinstance(self.alpha, float):
-            alpha = torch.ones(self.num_class, 1)
-            alpha = alpha * (1 - self.alpha)
-            alpha[balance_index] = self.alpha
-            self.alpha = alpha
+    def forward(self, inputs, targets):
+        
+        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduce=False)
+        pt = torch.exp(-BCE_loss)
+        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+
+        if self.reduce:
+            return torch.mean(F_loss)
         else:
-            raise TypeError('Not support alpha type')
+            return F_loss
 
-        if self.smooth is not None:
-            if self.smooth < 0 or self.smooth > 1.0:
-                raise ValueError('smooth value should be in [0,1]')
+class FocalLoss2(nn.Module):
+    def __init__(self, gamma=2.0):
+        super().__init__()
+        self.gamma = gamma
+        
+    def forward(self, input, target):
+        # Inspired by the implementation of binary_cross_entropy_with_logits
+        if not (target.size() == input.size()):
+            raise ValueError("Target size ({}) must be the same as input size ({})".format(target.size(), input.size()))
 
-    def forward(self, logit, target):
+        max_val = (-input).clamp(min=0)
+        loss = input - input * target + max_val + ((-max_val).exp() + (-input - max_val).exp()).log()
 
-        if logit.dim() > 2:
-            # N,C,d1,d2 -> N,C,m (m=d1*d2*...)
-            logit = logit.view(logit.size(0), logit.size(1), -1)
-            logit = logit.permute(0, 2, 1).contiguous()
-            logit = logit.view(-1, logit.size(-1))
-        target = target.view(-1, 1)
+        # This formula gives us the log sigmoid of 1-p if y is 0 and of p if y is 1
+        invprobs = F.logsigmoid(-input * (target * 2 - 1))
+        loss = (invprobs * self.gamma).exp() * loss
+        
+        return loss.mean()
 
-        epsilon = 1e-10
-        alpha = self.alpha
-        if alpha.device != logit.device:
-            alpha = alpha.to(logit.device)
+class FocalLoss3(nn.Module):
+    """
+    Arguments:
+        gamma (float, optional): focusing parameter. Default: 2.
+        alpha (float, optional): balancing parameter. Default: 0.25.
+        reduction (string, optional): Specifies the reduction to apply to the output:
+            'none' | 'mean' | 'sum'. 'none': no reduction will be applied,
+            'mean': the sum of the output will be divided by the number of
+            elements in the output, 'sum': the output will be summed. Default: 'mean'
+        eps (float, optional): small value to avoid division by zero. Default: 1e-6.
+    """
 
-        idx = target.cpu().long()
-
-        one_hot_key = torch.FloatTensor(target.size(0), self.num_class).zero_()
-        one_hot_key = one_hot_key.scatter_(1, idx, 1)
-        if one_hot_key.device != logit.device:
-            one_hot_key = one_hot_key.to(logit.device)
-
-        if self.smooth:
-            one_hot_key = torch.clamp(
-                one_hot_key, self.smooth/(self.num_class-1), 1.0 - self.smooth)
-        pt = (one_hot_key * logit).sum(1) + epsilon
-        logpt = pt.log()
-
-        gamma = self.gamma
-
-        alpha = alpha[idx]
-        loss = -1 * alpha * torch.pow((1 - pt), gamma) * logpt
-
-        if self.size_average:
-            loss = loss.mean()
+    def __init__(self, gamma=2, alpha=4.25, reduction="mean"):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        if reduction.lower() == "none":
+            self.reduction_op = None
+        elif reduction.lower() == "mean":
+            self.reduction_op = torch.mean
+        elif reduction.lower() == "sum":
+            self.reduction_op = torch.sum
         else:
-            loss = loss.sum()
-        return loss
+            raise ValueError(
+                "expected one of ('none', 'mean', 'sum'), got {}".format(reduction)
+            )
+
+    def forward(self, input, target):
+        if input.size() != target.size():
+            raise ValueError(
+                "size mismatch, {} != {}".format(input.size(), target.size())
+            )
+        elif target.unique(sorted=True).tolist() not in [[0, 1], [0], [1]]:
+            raise ValueError("target values are not binary")
+
+        input = input.view(-1)
+        target = target.view(-1)
+
+        # Following the paper: probabilities = probabilities if y=1; otherwise,
+        # probabilities = 1-probabilities
+        probabilities = torch.sigmoid(input)
+        probabilities = torch.where(target == 1, probabilities, 1 - probabilities)
+
+        # Compute the loss
+        focal = self.alpha * (1 - probabilities).pow(self.gamma)
+        bce = nn.functional.binary_cross_entropy_with_logits(input, target, reduction="none")
+        loss = focal * bce
+
+        if self.reduction_op is not None:
+            return self.reduction_op(loss)
+        else:
+            return loss

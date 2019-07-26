@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import glob
 import math
 import random
 import torch
@@ -16,13 +17,18 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     #tf.set_random_seed(seed)
 
-def save_checkpoint(dir, model, tag, epoch, save_dict):
-        state = {
-        	'epoch': epoch,
-        }
-        state.update(save_dict)
-        filepath = os.path.join(dir, '{}_{}_{}.pt'.format(model, tag, epoch))
-        torch.save(state, filepath)
+def save_checkpoint(ckpt_dir, model, tag, epoch, save_dict, keep_last=4):
+    state = {
+        'epoch': epoch,
+    }
+    state.update(save_dict)
+    filepath = os.path.join(ckpt_dir, '{}_{}_{}.pt'.format(model, tag, epoch))
+    torch.save(state, filepath)
+    # Remove old checkpoints
+    checkpoints = sorted(glob.glob(os.path.join(ckpt_dir, '{}_{}_*.pt'.format(model, tag))))
+    while (len(checkpoints) > keep_last):
+            os.remove(checkpoints[0])
+            checkpoints = checkpoints[1:]
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:

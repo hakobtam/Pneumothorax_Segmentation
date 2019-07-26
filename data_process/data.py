@@ -17,7 +17,7 @@ from data_process.data_utils import *
 def data_filter(root, data_ids, p_keep):
     filtered_ids = []
     for mask_id in data_ids:
-        mask = cv2.imread(os.path.join(root, mask_id + '.png', 0))
+        mask = cv2.imread(os.path.join(root, mask_id + '.png'), 0)
         if np.sum(mask > 0) > 0 or np.random.rand() < p_keep:
             filtered_ids.append(mask_id)
     return np.array(filtered_ids)

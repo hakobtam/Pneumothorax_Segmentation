@@ -15,7 +15,8 @@ from torchvision.transforms import *
 import torchvision.utils as vutils
 
 from metrices import *
-from loss.bce_losses import Loss, FocalLoss
+from loss.bce_losses import *
+from loss.lovasz_losses import lovasz_hinge, binary_xloss
 import models
 import utils# import set_seed, create_optimizer, choose_device, create_lr_scheduler
 from data_process.data_utils import *
@@ -81,7 +82,11 @@ if args.optim == 'adam':
 
 
 if args.loss == "Loss":
-    loss_fn = Loss(0.5)
+    loss_fn = Loss(0.1)
+if args.loss == "FocalLoss":
+    loss_fn = FocalLoss2()
+# if args.loss == "DiceLoss":
+#     loss_fn = mixed_dice_bce_loss()
 #loss_fn = torch.nn.BCELoss()
 #lr_scheduler = create_lr_scheduler(optimizer, **vars(args))
 
@@ -112,7 +117,7 @@ def train(epoch, loss_fn):
     running_loss, running_iou, running_dice, running_acc = 0.0, 0.0, 0.0, 0.0
     it, total = 0, 0
     #pbar_disable = False if epoch == start_epoch else None
-    pbar = tqdm(train_dataloader, unit="images", unit_scale=train_dataloader.batch_size, desc='Train')
+    pbar = tqdm(train_dataloader, unit="images", unit_scale=train_dataloader.batch_size, desc='Train: epoch {}'.format(epoch))
     for batch in pbar:
         inputs, targets = batch['input'], batch['target']
         #print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
@@ -125,9 +130,7 @@ def train(epoch, loss_fn):
         targets = targets.squeeze(1)
 
         probs = torch.sigmoid(logits)
-        loss = loss_fn(probs, targets)
-        if torch.isinf(loss):
-            set_trace()
+        loss = lovasz_hinge(logits, targets)
         # accumulate gradients
         if it == 0:
             optimizer.zero_grad()
@@ -181,7 +184,7 @@ def validation(epoch, loss_fn):
     best_batch_loss, best_batch_dice, best_batch_iou, best_batch_acc = best_loss, best_dice, best_iou, best_acc
     it, total = 0, 0
     #pbar_disable = False if epoch == start_epoch else None
-    pbar = tqdm(valid_dataloader, unit="images", unit_scale=valid_dataloader.batch_size, desc='Valid')
+    pbar = tqdm(valid_dataloader, unit="images", unit_scale=valid_dataloader.batch_size, desc='Valid: epoch {}'.format(epoch))
     for batch in pbar:
         inputs, targets = batch['input'], batch['target']
         #print("input shape: {}, output shape: {}".format(inputs.shape, targets.shape))
@@ -194,7 +197,7 @@ def validation(epoch, loss_fn):
         targets = targets.squeeze(1)
 
         probs = torch.sigmoid(logits)
-        loss = loss_fn(probs, targets)
+        loss = lovasz_hinge(logits, targets)
 
         # statistics
         it += 1
@@ -210,7 +213,7 @@ def validation(epoch, loss_fn):
 
         iou_array = iou_score(targets_numpy, predictions_numpy)
         dice_array = dice_score(targets_numpy, predictions_numpy)
-        acc_array = dice_score(targets_numpy, predictions_numpy)
+        acc_array = accuracy_score(targets_numpy, predictions_numpy)
         iou = iou_array.mean()
         dice = dice_array.mean()
         acc = acc_array.mean()        
@@ -272,13 +275,14 @@ for epoch in np.arange(start_epoch, args.epochs):
     tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc = train(epoch, loss_fn)
     val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc = validation(epoch, loss_fn)
     state = {
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'loss': val_epoch_loss,
-        'dice': val_epoch_dice,
-        'iou': val_epoch_iou,
-        'acc': val_epoch_acc,
+        'model_state': model.state_dict(),
+        'optimizer_state': optimizer.state_dict(),
+        'loss_value': val_epoch_loss,
+        'dice_value': val_epoch_dice,
+        'iou_value': val_epoch_iou,
+        'acc_value': val_epoch_acc,
     }
+    state.update(vars(args))
     mark = 0
     if val_epoch_loss < best_loss:
         mark = 1
@@ -297,7 +301,7 @@ for epoch in np.arange(start_epoch, args.epochs):
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch, save_dict=state)
     if val_epoch_acc > best_acc:
         mark = 1
-        print ("Model IoU improved!!! {} -> {}".format(best_acc, val_epoch_acc))
+        print ("Model Acc improved!!! {} -> {}".format(best_acc, val_epoch_acc))
         best_acc= val_epoch_acc
         utils.save_checkpoint(dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch, save_dict=state)
     if mark == 0:
