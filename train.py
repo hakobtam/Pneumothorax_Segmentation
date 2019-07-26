@@ -277,10 +277,10 @@ for epoch in np.arange(start_epoch, args.epochs):
     state = {
         'model_state': model.state_dict(),
         'optimizer_state': optimizer.state_dict(),
-        'loss_value': val_epoch_loss,
-        'dice_value': val_epoch_dice,
-        'iou_value': val_epoch_iou,
-        'acc_value': val_epoch_acc,
+        'loss_val': val_epoch_loss,
+        'dice_val': val_epoch_dice,
+        'iou_val': val_epoch_iou,
+        'acc_val': val_epoch_acc,
     }
     state.update(vars(args))
     mark = 0
