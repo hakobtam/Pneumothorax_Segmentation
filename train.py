@@ -95,7 +95,7 @@ def eval_model(model, val_data_idx, loss_fn):
 
 def train_runner(args):
     epochs = args.epochs
-    batch_size = args.batch_szie
+    batch_size = args.batch_size
     learning_rate = args.learning_rate
     shuffle = True
     num_workers = 1
