@@ -6,6 +6,65 @@ import torch.nn as nn
 from functools import partial
 from torch.nn import functional as F
 
+class JaccardLoss(nn.Module):
+    __name__ = 'jaccard_loss'
+
+    def __init__(self, eps=1e-7):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, logit, target):
+        output = torch.sigmoid(logit)
+
+        intersection = torch.sum(target * output)
+        union = torch.sum(target) + torch.sum(output) - intersection + self.eps
+        return 1 - (intersection + self.eps) / union
+
+
+class DiceLoss(nn.Module):
+    __name__ = 'dice_loss'
+
+    def __init__(self, eps=1e-7, beta=1.0):
+        super().__init__()
+        self.beta = beta
+        self.eps = eps
+
+    def forward(self, logit, target):
+        output = torch.sigmoid(logit)
+
+        tp = torch.sum(target * output)
+        fp = torch.sum(output) - tp
+        fn = torch.sum(target) - tp
+        score = ((1 + self.beta ** 2) * tp + self.eps) \
+                / ((1 + self.beta ** 2) * tp + self.beta ** 2 * fn + fp + self.eps)
+
+        return 1 - score
+
+
+class BCEJaccardLoss(JaccardLoss):
+    __name__ = 'bce_jaccard_loss'
+
+    def __init__(self, eps=1e-7):
+        super().__init__(eps)
+        self.bce = nn.BCEWithLogitsLoss(reduction='mean')
+
+    def forward(self, logit, target):
+        jaccard = super().forward(logit, target)
+        bce = self.bce(logit, target)
+        return jaccard + bce
+
+
+class BCEDiceLoss(DiceLoss):
+    __name__ = 'bce_dice_loss'
+
+    def __init__(self, eps=1e-7, beta=1.0):
+        super().__init__(eps, beta)
+        self.bce = nn.BCEWithLogitsLoss(reduction='mean')
+
+    def forward(self, logit, target):
+        dice = super().forward(logit, target)
+        bce = self.bce(logit, target)
+        return dice + bce
 
 class Loss:
     def __init__(self, dice_weight=1):
@@ -27,55 +86,29 @@ class Loss:
             
         return loss
 
-class DiceLoss(nn.Module):
-    def __init__(self, smooth=1e-13, eps=1e-7):
-        super(DiceLoss, self).__init__()
-        self.smooth = smooth
-        self.eps = eps
+# class DiceLoss(nn.Module):
+#     def __init__(self, smooth=1., eps=1e-7):
+#         super(DiceLoss, self).__init__()
+#         self.smooth = smooth
+#         self.eps = eps
 
-    def forward(self, output, target):
-        return 1 - (2 * torch.sum(output * target) + self.smooth) / (
-                torch.sum(output) + torch.sum(target) + self.smooth + self.eps)
-
-
-def mixed_dice_bce_loss(output, target, dice_weight=0.2, dice_loss=None,
-                        bce_weight=0.9, bce_loss=None,
-                        smooth=0, dice_activation='sigmoid'):
-
-    num_classes = output.size(1)
-    target = target[:, :num_classes, :, :].long()
-    if bce_loss is None:
-        bce_loss = nn.BCEWithLogitsLoss()
-    if dice_loss is None:
-        dice_loss = multiclass_dice_loss
-    return dice_weight * dice_loss(output, target, smooth, dice_activation) + bce_weight * bce_loss(output, target)
+#     def forward(self, output, target):
+#         return 1 - (2 * torch.sum(output * target) + self.smooth) / (
+#                 torch.sum(output) + torch.sum(target) + self.smooth + self.eps)
 
 
-def multiclass_dice_loss(output, target, smooth=0, activation='softmax'):
-    """Calculate Dice Loss for multiple class output.
-    Args:
-        output (torch.Tensor): Model output of shape (N x C x H x W).
-        target (torch.Tensor): Target of shape (N x H x W).
-        smooth (float, optional): Smoothing factor. Defaults to 0.
-        activation (string, optional): Name of the activation function, softmax or sigmoid. Defaults to 'softmax'.
-    Returns:
-        torch.Tensor: Loss value.
-    """
-    if activation == 'softmax':
-        activation_nn = torch.nn.Softmax2d()
-    elif activation == 'sigmoid':
-        activation_nn = torch.nn.Sigmoid()
-    else:
-        raise NotImplementedError('only sigmoid and softmax are implemented')
+# def mixed_dice_bce_loss(output, target, dice_weight=0.2, dice_loss=None,
+#                         bce_weight=0.9, bce_loss=None,
+#                         smooth=0, dice_activation='sigmoid'):
 
-    loss = 0
-    dice = DiceLoss(smooth=smooth)
-    output = activation_nn(output)
-    num_classes = output.size(1)
-    target.data = target.data.float()
-    for class_nr in range(num_classes):
-        loss += dice(output[:, class_nr, :, :], target[:, class_nr, :, :])
-    return loss / num_classes
+#     num_classes = output.size(1)
+#     target = target[:, :num_classes, :, :].long()
+#     if bce_loss is None:
+#         bce_loss = nn.BCEWithLogitsLoss()
+#     if dice_loss is None:
+#         dice_loss = multiclass_dice_loss
+#     return dice_weight * dice_loss(output, target, smooth, dice_activation) + bce_weight * bce_loss(output, target)
+
 
 # Code has been taken from https://github.com/Hsuxu/Loss_ToolBox-PyTorch
 class FocalLoss1(nn.Module):
