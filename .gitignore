@@ -1,1 +1,8 @@
-input/
+__pycache__/
+.cache
+.DS_Store
+.ipynb_checkpoints
+.vscode/
+submissions/
+tmp.py
+runs/
