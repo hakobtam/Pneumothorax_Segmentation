@@ -56,6 +56,9 @@ class PrepareData(object):
         mask = data['mask']
         if len(img.shape) == 2:
             img = np.expand_dims(img, axis=-1)
+        if img.shape[2] == 1:
+            img = img.squeeze(-1)
+            img = np.stack([img]*3, axis=-1)
         if len(mask.shape) == 2:
             mask = np.expand_dims(mask, axis=-1)
         img = img / 255

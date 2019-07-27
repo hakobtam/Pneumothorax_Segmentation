@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 class DoubleConv(nn.Module):
-    def __init__(self, in_ch, out_ch, batch_norm=True):
+    def __init__(self, in_ch, out_ch, batch_norm=False):
         super(DoubleConv, self).__init__()
         if batch_norm:
             self.conv = nn.Sequential(
@@ -93,7 +93,7 @@ class UNet(nn.Module):
                     self, 
                     n_channels=1, 
                     n_classes=1,
-                    num_filters=32,
+                    num_filters=64,
                     up_mode = 'bilinear',
                     batch_norm=True,
                 ):

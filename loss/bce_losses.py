@@ -57,14 +57,15 @@ class BCEJaccardLoss(JaccardLoss):
 class BCEDiceLoss(DiceLoss):
     __name__ = 'bce_dice_loss'
 
-    def __init__(self, eps=1e-7, beta=1.0):
+    def __init__(self, eps=1e-7, beta=1.0, bce_weight=0.2):
         super().__init__(eps, beta)
         self.bce = nn.BCEWithLogitsLoss(reduction='mean')
+        self.bce_weight = bce_weight
 
     def forward(self, logit, target):
         dice = super().forward(logit, target)
         bce = self.bce(logit, target)
-        return dice + bce
+        return dice + self.bce_weight * bce
 
 class Loss:
     def __init__(self, dice_weight=1):

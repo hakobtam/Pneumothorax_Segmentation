@@ -11,6 +11,7 @@ sys.path.append('../')
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
+from torchvision.transforms import ToTensor
 
 from data_process.data_utils import *
 
@@ -24,7 +25,7 @@ def data_filter(root, data_ids, p_keep):
 
 class SIIMDataset(Dataset):
 
-    def __init__(self, root='../input/data', subset='train', transform=None, img_size=1024,
+    def __init__(self, root='../input/data', subset='train', transform=None, preprocessing=None, img_size=1024,
                 folds_dir='10folds', fold_id=0, prob_keep=None, data_len=None):
         
         folds_dir = os.path.join('data_process/splits', folds_dir)
@@ -37,6 +38,7 @@ class SIIMDataset(Dataset):
 
         self.root = root
         self.transform = transform
+        self.preprocessing = preprocessing
         self.subset = subset
         self.features_dict = {}
         self.img_dir, self.label_dir = None, None
@@ -68,22 +70,29 @@ class SIIMDataset(Dataset):
         # load image and labels
         img_id = self.img_list[index]
         img = cv2.imread(os.path.join(self.img_dir, img_id + '.png'), 0)
-        target =cv2.imread(os.path.join(self.label_dir, img_id + '.png'), 0) if not self.subset == 'test' else None
+        target =cv2.imread(os.path.join(self.label_dir, img_id + '.png'), 0) if not self.subset == 'test' else np.zeros(img.shape)
 
         # apply transforms to both
-        if target is not None:
-            img, target = self.transform({'input': img, 'mask':target}).values()
-        else:
-            print(os.path.join(self.label_dir, img_id + '.png'))
-            img, _ = self.transform({'input': img, 'mask': np.zeros(img.shape)}).values()
+        img, target = self.transform({'input': img, 'mask': target}).values()
+        # apply preprocessing
+        img_processed = self.preprocessing(img)
 
         if target is not None:
             assert target.max() <= 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
             target[(target > 0) & (target < 1.0)] = 0
             assert ((target > 0) & (target < 1.0)).sum() == 0
-            return {'input': torch.Tensor(img), 'target': torch.Tensor(target), 'params': self.features_dict[img_id]}
+            return {
+                    'input': ToTensor()(img_processed), 
+                    'input_img': ToTensor()(img),
+                    'target': ToTensor()(target), 
+                    'params': self.features_dict[img_id]
+                    }
         else:
-            return {'input': torch.Tensor(img), 'params': self.features_dict[img_id]}
+            return {
+                    'input': torch.Tensor(img_processed), 
+                    'input_img': ToTensor()(img),
+                    'params': self.features_dict[img_id]
+                    }
 
     def __len__(self):
         return len(self.img_list) if self.data_len is None else self.data_len
