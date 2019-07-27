@@ -18,8 +18,8 @@ def rmse(y, y_hat):
 
 
 def calculate_accuracy(x, y):
-    x = x.squeeze(dim=1)
-    y = y.squeeze(dim=1)
+    x = x.squeeze(dim=1).cpu()
+    y = y.squeeze(dim=1).cpu()
 
     zero_matrix = torch.zeros(x.shape)
     one_matrix = torch.ones(x.shape)
@@ -42,14 +42,17 @@ def train_model(model, batch_size, optimizer, data_idx, loss_fn, epoch):
 
     # model.cuda()
     model.train()
+    torch.set_grad_enabled(True)
     transform = transforms.Compose([PrepareData()])
     data_set = SIIMDataset(fold_id=data_idx, transform=transform)
     data_loader = DataLoader(data_set, batch_size=batch_size, shuffle=True)
     for idx, batch in enumerate(data_loader):
         inputs = batch["input"]
         target = batch["target"]
+        inputs = inputs.cuda()
+        target = target.cuda()
         # target = target.unsqueeze(0)
-        target = torch.autograd.Variable(target)
+        #target = torch.autograd.Variable(target)
         # if torch.cuda.is_available():
             # inputs = inputs.cuda()
             # target = target.cuda()
@@ -73,6 +76,8 @@ def train_model(model, batch_size, optimizer, data_idx, loss_fn, epoch):
 
 def eval_model(model, val_data_idx, loss_fn):
     model.eval()
+    torch.set_grad_enabled(False)
+
     transform = transforms.Compose([PrepareData(), HWCtoCHW])
     data_set = SIIMDataset(fold_id=val_data_idx, transform=transform)
     data_loader = DataLoader(data_set, batch_size=len(data_set), shuffle=True)
@@ -80,7 +85,9 @@ def eval_model(model, val_data_idx, loss_fn):
         data = next(data_loader)
         inputs = data["input"]
         target = data["target"]
-        target = torch.autograd.Variable(target).long()
+        inputs = inputs.cuda()
+        target = target.cuda()
+        #target = torch.autograd.Variable(target).long()
         if torch.cuda.is_available():
             inputs = inputs.cuda()
             target = target.cuda()
@@ -101,6 +108,7 @@ def train_runner(args):
     num_workers = 1
 
     model = UNet(3, 1)
+    model.cuda()
     optimizer = Adam(params=model.parameters(), lr=learning_rate)
     loss = rmse
     for e in range(epochs):
@@ -115,7 +123,7 @@ def train_runner(args):
 if __name__ == '__main__':
     train_parser = argparse.ArgumentParser(description='Bla bla bla Grish jan')
     train_parser.add_argument('--epochs', type=int, help='Epochs of train', default=16, required=False)
-    train_parser.add_argument('--batch_size', type=int, help='Batch size of train', default=16, required=False)
-    train_parser.add_argument('--learning_rate', type=float, help="Learning rate of train", default=0.0001, required=False)
+    train_parser.add_argument('--batch_size', type=int, help='Batch size of train', default=10, required=False)
+    train_parser.add_argument('--learning_rate', type=float, help="Learning rate of train", default=0.001, required=False)
     args = train_parser.parse_args()
     train_runner(args)
