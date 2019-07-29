@@ -9,6 +9,8 @@ from torchvision import transforms
 
 from data_process import PrepareData, HWCtoCHW, mask2rle
 
+from losses.dice_loss import DiceLoss
+
 import argparse
 
 
@@ -110,7 +112,7 @@ def train_runner(args):
     model = UNet(3, 1)
     model.cuda()
     optimizer = Adam(params=model.parameters(), lr=learning_rate)
-    loss = rmse
+    loss = DiceLoss()
     for e in range(epochs):
         val_idx = random.randint(0, 9)
         range_list = list(range(0, 10))
