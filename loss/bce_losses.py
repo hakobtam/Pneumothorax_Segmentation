@@ -72,7 +72,8 @@ class Loss:
         self.nll_loss = nn.BCELoss()
         self.dice_weight = dice_weight
 
-    def __call__(self, outputs, targets):
+    def __call__(self, logits, targets):
+        outputs = torch.sigmoid(logits)
         assert ((outputs < 0) | (outputs > 1.0)).sum() == 0
         loss = self.nll_loss(outputs, targets)
         if self.dice_weight:

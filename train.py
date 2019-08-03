@@ -42,11 +42,13 @@ parser.add_argument("--lr", type=float, default=1e-2, help='learning rate for op
 #parser.add_argument("--lr_scheduler", type=float, default='step', help='method to adjust learning rate')
 parser.add_argument("--epochs", type=int, default=350, help='number of epochs')
 parser.add_argument("--debug", action='store_true', help='write debug images')
-#parser.add_argument("--resume", type=str, help='checkpoint file to resume')
+parser.add_argument("--resume", type=str, help='checkpoint file to resume')
+parser.add_argument('--resume-without-optimizer', action='store_true', help='resume but don\'t use optimizer state')
 current_time = datetime.now().strftime('%b%d_%H-%M-%S')
 default_log_dir = os.path.join('runs', current_time)
 parser.add_argument('--log_dir', type=str, default=default_log_dir, help='location to save logs and checkpoints')
 parser.add_argument('--seed', type=int, default=27, help='seed value for random state')
+parser.add_argument("--freeze", action='store_true', help='freeze encoder weights')
 parser.add_argument('--pretrained', default='imagenet', choices=('imagenet', 'coco', 'oid'), help='dataset name for pretrained model')
 args = parser.parse_args()
 
@@ -87,18 +89,21 @@ model = getattr(models, args.model)(
                                     activation='sigmoid'
                                 )
 model.cuda()
+
+if args.freeze:
+    for param in model.encoder.parameters():
+        param.requires_grad = False
 parameters = [p for p in model.parameters() if p.requires_grad]
 print('Number of parameters', len(parameters))
 if args.optim == 'adam':
     optimizer = torch.optim.Adam(parameters, lr=args.lr, weight_decay=args.wd)
-
 
 if args.loss == "Loss":
     loss_fn = Loss(0.1)
 if args.loss == "FocalLoss":
     loss_fn = FocalLoss2()
 if args.loss == "BCEDiceLoss":
-    loss_fn = BCEDiceLoss(eps=1.)
+    loss_fn = BCEDiceLoss()
 # if args.loss == "DiceLoss":
 #     loss_fn = mixed_dice_bce_loss()
 #loss_fn = torch.nn.BCELoss()
@@ -111,6 +116,29 @@ best_iou = 0
 best_acc = 0
 tr_global_step = 0
 val_global_step = 0
+noise_th=75.0*(args.img_size/128.0)**2
+
+if args.resume:
+    print("resuming a checkpoint '%s'" % args.resume)
+    if os.path.exists(args.resume):
+        saved_checkpoint = torch.load(args.resume)
+        model.load_state_dict(saved_checkpoint['model_state'])
+
+        if not args.resume_without_optimizer:
+            optimizer.load_state_dict(saved_checkpoint['optimizer_state'])
+            #lr_scheduler.load_state_dict(saved_checkpoint['lr_scheduler'])
+            best_loss = saved_checkpoint.get('loss_val', best_loss)
+            best_dice = saved_checkpoint.get('dice_val', best_dice)
+            best_iou = saved_checkpoint.get('iou_val', best_iou)
+            best_acc = saved_checkpoint.get('acc_val', best_acc)
+            start_epoch = saved_checkpoint.get('epoch', start_epoch)
+            #global_step = saved_checkpoint.get('step', global_step)
+
+        del saved_checkpoint  # reduce memory
+    else:
+        print(">\n>\n>\n>\n>\n>")
+        print(">Warning the checkpoint '%s' doesn't exist! training from scratch!" % args.resume)
+        print(">\n>\n>\n>\n>\n>")
 
 print("logging into {}".format(args.log_dir))
 tensorboard_dir = os.path.join(args.log_dir, 'tensorboard')
@@ -146,10 +174,9 @@ def train(epoch, loss_fn):
         probs = torch.sigmoid(logits)
         loss = loss_fn(logits, targets)
         # accumulate gradients
-        if it == 0:
-            optimizer.zero_grad()
+        loss = loss / args.grad_accumulation    
         loss.backward()
-        if it % args.grad_accumulation == 0:
+        if (it + 1) % args.grad_accumulation == 0:
             optimizer.step()
             optimizer.zero_grad()
 
@@ -167,7 +194,7 @@ def train(epoch, loss_fn):
         predictions_numpy = probs_numpy > 0.5  # predictions.cpu().numpy()
 
         running_iou += iou_score(targets_numpy, predictions_numpy).sum()
-        running_dice += dice_score(targets_numpy, predictions_numpy).sum()
+        running_dice += dice_score(targets_numpy, predictions_numpy, noise_th=noise_th).sum()
         running_acc += accuracy_score(targets_numpy, predictions_numpy).sum()
         
         # update the progress bar
@@ -226,7 +253,7 @@ def validation(epoch, loss_fn):
         predictions_numpy = probs_numpy > 0.5  # predictions.cpu().numpy()
 
         iou_array = iou_score(targets_numpy, predictions_numpy)
-        dice_array = dice_score(targets_numpy, predictions_numpy)
+        dice_array = dice_score(targets_numpy, predictions_numpy, noise_th=noise_th)
         acc_array = accuracy_score(targets_numpy, predictions_numpy)
         iou = iou_array.mean()
         dice = dice_array.mean()

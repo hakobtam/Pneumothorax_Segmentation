@@ -3,6 +3,7 @@ __pycache__/
 .DS_Store
 .ipynb_checkpoints
 .vscode/
+.venv
 submissions/
 tmp.py
 runs/
