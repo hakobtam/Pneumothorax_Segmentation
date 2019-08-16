@@ -82,14 +82,14 @@ class SIIMDataset(Dataset):
             target[(target > 0) & (target < 1.0)] = 0
             assert ((target > 0) & (target < 1.0)).sum() == 0
             return {
-                    'input': ToTensor()(img_processed), 
+                    'input': ToTensor()(img_processed).float(), 
                     'input_img': ToTensor()(img),
                     'target': ToTensor()(target), 
                     'params': self.features_dict[img_id]
                     }
         else:
             return {
-                    'input': torch.Tensor(img_processed), 
+                    'input': torch.Tensor(img_processed).float(), 
                     'input_img': ToTensor()(img),
                     'params': self.features_dict[img_id]
                     }

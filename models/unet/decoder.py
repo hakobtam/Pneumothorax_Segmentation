@@ -16,7 +16,7 @@ class DecoderBlock(nn.Module):
 
     def forward(self, x):
         x, skip = x
-        x = F.interpolate(x, scale_factor=2, mode='bilinear')
+        x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=False)
         if skip is not None:
             x = torch.cat([x, skip], dim=1)
         x = self.block(x)

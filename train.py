@@ -21,6 +21,8 @@ import models
 import utils# import set_seed, create_optimizer, choose_device, create_lr_scheduler
 from data_process.data_utils import *
 from data_process import SIIMDataset
+from efficientnet_pytorch import EfficientNet
+
 
 from pdb import set_trace
 
@@ -31,7 +33,7 @@ parser.add_argument("--img_size", type=int, default=512, help='input image size'
 parser.add_argument("--num_workers", type=int, default=4, help='number of workers')
 parser.add_argument("--model", type=str, default='Unet', help='NN model name')
 parser.add_argument("--encoder", type=str, default='resnet50', help='encoder name')
-parser.add_argument("--num_filters", type=int, default=64, help='NN model number of filters')
+#parser.add_argument("--num_filters", type=int, default=64, help='NN model number of filters')
 parser.add_argument("--batch_size", type=int, default=32, help='batch size')
 parser.add_argument("--loss", type=str, default='Loss', help='loss function')
 parser.add_argument("--wd", type=float, default=1e-4, help='weight decay')
@@ -54,11 +56,28 @@ args = parser.parse_args()
 
 #RandomChoice
 #RandomApply
-preprocessing_fn = models.encoders.get_preprocessing_fn(args.encoder, args.pretrained)
+utils.set_seed(args.seed)
+#torch.backends.cudnn.benchmark = True
+if args.model == "EfficientNet":
+    model_name = 'efficientnet-b6'
+    image_size = EfficientNet.get_image_size(model_name) 
+    model = EfficientNet.from_pretrained(model_name, num_classes=1)
+    preprocessing_transform = Compose([Resize(224), transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
+else:
+    preprocessing_fn = models.encoders.get_preprocessing_fn(args.encoder, args.pretrained)
+    preprocessing_transform = Compose([preprocessing_fn])
+    model = getattr(models, args.model)(
+                                        encoder_name=args.encoder,
+                                        encoder_weights=args.pretrained, 
+                                        classes=1, 
+                                        activation='sigmoid'
+                                    )
+model.cuda()
+
 train_transform = Compose([PrepareData()])
 valid_transform = Compose([PrepareData()])
 
-preprocessing_transform = Compose([preprocessing_fn])
 #print(sys.argv)
 os.makedirs(args.log_dir, exist_ok=True)
 with open(os.path.join(args.log_dir, 'command.sh'), 'w') as f:
@@ -80,20 +99,22 @@ train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch
 valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=args.batch_size,
                               num_workers=args.num_workers, drop_last=True)
 
-utils.set_seed(args.seed)
-#torch.backends.cudnn.benchmark = True
-model = getattr(models, args.model)(
-                                    encoder_name=args.encoder,
-                                    encoder_weights=args.pretrained, 
-                                    classes=1, 
-                                    activation='sigmoid'
-                                )
-model.cuda()
 
 if args.freeze:
     for param in model.encoder.parameters():
         param.requires_grad = False
-parameters = [p for p in model.parameters() if p.requires_grad]
+
+# for name, param in model.encoder.named_parameters():
+#     print(name)
+# exit()
+#parameters = [p for p in model.parameters() if p.requires_grad]
+parameters = [
+                {'params': [p for name, p in model.encoder.named_parameters() if 'layer1' in name], 'lr': args.lr/10000},
+                {'params': [p for name, p in model.encoder.named_parameters() if 'layer2' in name], 'lr': args.lr/1000},
+                {'params': [p for name, p in model.encoder.named_parameters() if 'layer3' in name], 'lr': args.lr/100},
+                {'params': [p for name, p in model.encoder.named_parameters() if 'layer4' in name], 'lr': args.lr/10},
+                {'params': [p for name, p in model.decoder.named_parameters()]}
+            ]
 print('Number of parameters', len(parameters))
 if args.optim == 'adam':
     optimizer = torch.optim.Adam(parameters, lr=args.lr, weight_decay=args.wd)
@@ -103,7 +124,11 @@ if args.loss == "Loss":
 if args.loss == "FocalLoss":
     loss_fn = FocalLoss2()
 if args.loss == "BCEDiceLoss":
-    loss_fn = BCEDiceLoss()
+    loss_fn = BCEDiceLoss(bce_weight=0.2)
+if args.loss == "lovasz":
+    loss_fn = lovasz_hinge
+if args.loss == "criterion":
+    loss_fn = criterion
 # if args.loss == "DiceLoss":
 #     loss_fn = mixed_dice_bce_loss()
 #loss_fn = torch.nn.BCELoss()
@@ -308,56 +333,58 @@ def validation(epoch, loss_fn):
     writer.add_scalar('valid/accuracy', epoch_acc, epoch)
     return epoch_loss, epoch_iou, epoch_dice, epoch_acc
 
-print("training {}...".format(args.model))
-#pbar_epoch = tqdm(np.arange(start_epoch, args.epochs))
 
-for epoch in np.arange(start_epoch, args.epochs):
+if __name__ == '__main__':
+    print("training {}...".format(args.model))
+    #pbar_epoch = tqdm(np.arange(start_epoch, args.epochs))
 
-    tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc = train(epoch, loss_fn)
-    val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc = validation(epoch, loss_fn)
-    state = {
-        'model_state': model.state_dict(),
-        'optimizer_state': optimizer.state_dict(),
-        'loss_val': val_epoch_loss,
-        'dice_val': val_epoch_dice,
-        'iou_val': val_epoch_iou,
-        'acc_val': val_epoch_acc,
-    }
-    state.update(vars(args))
-    mark = 0
-    if val_epoch_loss < best_loss:
-        mark = 1
-        print ("Model Loss improved!!! {} -> {}".format(best_loss, val_epoch_loss))
-        best_loss = val_epoch_loss
-        utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model , tag='best-loss', epoch=epoch, save_dict=state)
-    if val_epoch_dice > best_dice:
-        mark = 1
-        print ("Model Dice improved!!! {} -> {}".format(best_dice, val_epoch_dice))
-        best_dice = val_epoch_dice
-        utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-dice', epoch=epoch, save_dict=state)
-    if val_epoch_iou > best_iou:
-        mark = 1
-        print ("Model IoU improved!!! {} -> {}".format(best_iou, val_epoch_iou))
-        best_iou = val_epoch_iou
-        utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch, save_dict=state)
-    if val_epoch_acc > best_acc:
-        mark = 1
-        print ("Model Acc improved!!! {} -> {}".format(best_acc, val_epoch_acc))
-        best_acc= val_epoch_acc
-        utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch, save_dict=state)
-    if mark == 0:
-        print("Model didn't improved")
+    for epoch in np.arange(start_epoch, args.epochs):
+        loss_fn_to_pass=loss_fn
+        tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc = train(epoch, loss_fn_to_pass)
+        val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc = validation(epoch, loss_fn_to_pass)
+        state = {
+            'model_state': model.state_dict(),
+            'optimizer_state': optimizer.state_dict(),
+            'loss_val': val_epoch_loss,
+            'dice_val': val_epoch_dice,
+            'iou_val': val_epoch_iou,
+            'acc_val': val_epoch_acc,
+        }
+        state.update(vars(args))
+        mark = 0
+        if val_epoch_loss < best_loss:
+            mark = 1
+            print ("Model Loss improved!!! {} -> {}".format(best_loss, val_epoch_loss))
+            best_loss = val_epoch_loss
+            utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model , tag='best-loss', epoch=epoch, save_dict=state)
+        if val_epoch_dice > best_dice:
+            mark = 1
+            print ("Model Dice improved!!! {} -> {}".format(best_dice, val_epoch_dice))
+            best_dice = val_epoch_dice
+            utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-dice', epoch=epoch, save_dict=state)
+        if val_epoch_iou > best_iou:
+            mark = 1
+            print ("Model IoU improved!!! {} -> {}".format(best_iou, val_epoch_iou))
+            best_iou = val_epoch_iou
+            utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-iou', epoch=epoch, save_dict=state)
+        if val_epoch_acc > best_acc:
+            mark = 1
+            print ("Model Acc improved!!! {} -> {}".format(best_acc, val_epoch_acc))
+            best_acc= val_epoch_acc
+            utils.save_checkpoint(ckpt_dir=checkpoint_dir, model=args.model, tag='best-acc', epoch=epoch, save_dict=state)
+        if mark == 0:
+            print("Model didn't improved")
 
 
-    # pbar_epoch.set_postfix({'lr': '{:.02e}' % utils.get_lr(optimizer),
-    #                         'train': '%.03f/%.03f/%.03f' .format(
-    #                         tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc),
-    #                         'val': '%.03f/%.03f/%.03f'.format(
-    #                         val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc),
-    #                         'best val': '%.03f/%.03f/%.03f'.format(best_loss, best_dice, best_iou, best_acc)},
-    #                        refresh=False)
+        # pbar_epoch.set_postfix({'lr': '{:.02e}' % utils.get_lr(optimizer),
+        #                         'train': '%.03f/%.03f/%.03f' .format(
+        #                         tr_epoch_loss, tr_epoch_iou, tr_epoch_dice, tr_epoch_acc),
+        #                         'val': '%.03f/%.03f/%.03f'.format(
+        #                         val_epoch_loss, val_epoch_iou, val_epoch_dice, val_epoch_acc),
+        #                         'best val': '%.03f/%.03f/%.03f'.format(best_loss, best_dice, best_iou, best_acc)},
+        #                        refresh=False)
 
-#utils.save_checkpoint('last')
-print("best valid loss: {:.05f}, best valid dice: {:.03f}, best valid iou: {:.03f}, best valid accuracy: {:.03f},".\
-     format(best_loss, best_dice, best_iou, best_acc))
+    #utils.save_checkpoint('last')
+    print("best valid loss: {:.05f}, best valid dice: {:.03f}, best valid iou: {:.03f}, best valid accuracy: {:.03f},".\
+        format(best_loss, best_dice, best_iou, best_acc))
 

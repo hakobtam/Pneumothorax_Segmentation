@@ -25,10 +25,11 @@ def save_checkpoint(ckpt_dir, model, tag, epoch, save_dict, keep_last=4):
     filepath = os.path.join(ckpt_dir, '{}_{}_{}.pt'.format(model, tag, epoch))
     torch.save(state, filepath)
     # Remove old checkpoints
-    checkpoints = sorted(glob.glob(os.path.join(ckpt_dir, '{}_{}_*.pt'.format(model, tag))))
+    checkpoints = glob.glob(os.path.join(ckpt_dir, '{}_{}_*.pt'.format(model, tag)))
+    checkpoints.sort(key=lambda text: int(text.split('.pt')[0].split('_')[-1]))
     while (len(checkpoints) > keep_last):
-            os.remove(checkpoints[0])
-            checkpoints = checkpoints[1:]
+        os.remove(checkpoints[0])
+        checkpoints = checkpoints[1:]
 
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:

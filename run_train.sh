@@ -1,21 +1,23 @@
 #!/bin/bash
 
 python train.py \
---model Linknet \
+--model Unet \
 --encoder resnet34 \
 --pretrained imagenet \
---num_filters 32 \
 --folds_dir 10folds \
 --fold_id 0 \
---img_size 256 \
+--img_size 1024 \
 --num_workers 4 \
---batch_size 16 \
+--batch_size 8 \
 --loss BCEDiceLoss \
 --wd 1e-4 \
 --optim adam \
---grad_accumulation 1 \
---lr 1e-3 \
+--grad_accumulation 2 \
+--lr 1e-4 \
 --epochs 100 \
 --seed 27 \
---freeze
+--resume ./runs/Aug15_19-47-17/checkpoints/Unet_best-dice_19.pt
+#--resume ./runs/Aug03_13-03-43/checkpoints/Unet_best-dice_23.pt
+#--resume-without-optimizer
+#--freeze
 #--debug

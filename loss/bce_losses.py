@@ -6,6 +6,22 @@ import torch.nn as nn
 from functools import partial
 from torch.nn import functional as F
 
+def criterion(logit, truth):
+    logit = logit.view(-1)
+    truth = truth.view(-1)
+    assert(logit.shape==truth.shape)
+
+    loss = F.binary_cross_entropy_with_logits(logit, truth, reduction='none')
+
+    pos = (truth>0.5).float()
+    neg = (truth<0.5).float()
+    pos_weight = pos.sum().item() + 1e-12
+    neg_weight = neg.sum().item() + 1e-12
+    loss = (0.25*pos*loss/pos_weight + 0.75*neg*loss/neg_weight).sum()
+
+    return loss
+
+
 class JaccardLoss(nn.Module):
     __name__ = 'jaccard_loss'
 
