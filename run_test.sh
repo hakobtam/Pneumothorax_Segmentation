@@ -5,6 +5,6 @@ python test.py \
 --batch_size 16 \
 --seed 27 \
 --threshold 0.5 \
---ckpt ./runs/Aug15_22-29-05/checkpoints/Unet_best-dice_22.pt \
+--ckpt ./runs/Aug17_21-35-25/checkpoints/Unet_best-dice_39.pt \
 --tta \
 --use_gpu

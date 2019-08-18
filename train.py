@@ -22,6 +22,8 @@ import utils# import set_seed, create_optimizer, choose_device, create_lr_schedu
 from data_process.data_utils import *
 from data_process import SIIMDataset
 from efficientnet_pytorch import EfficientNet
+import albumentations as albu
+from sampler import ImbalancedDatasetSampler
 
 
 from pdb import set_trace
@@ -54,30 +56,34 @@ parser.add_argument("--freeze", action='store_true', help='freeze encoder weight
 parser.add_argument('--pretrained', default='imagenet', choices=('imagenet', 'coco', 'oid'), help='dataset name for pretrained model')
 args = parser.parse_args()
 
-#RandomChoice
-#RandomApply
+
 utils.set_seed(args.seed)
 #torch.backends.cudnn.benchmark = True
-if args.model == "EfficientNet":
-    model_name = 'efficientnet-b6'
-    image_size = EfficientNet.get_image_size(model_name) 
-    model = EfficientNet.from_pretrained(model_name, num_classes=1)
-    preprocessing_transform = Compose([Resize(224), transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
-else:
-    preprocessing_fn = models.encoders.get_preprocessing_fn(args.encoder, args.pretrained)
-    preprocessing_transform = Compose([preprocessing_fn])
-    model = getattr(models, args.model)(
-                                        encoder_name=args.encoder,
-                                        encoder_weights=args.pretrained, 
-                                        classes=1, 
-                                        activation='sigmoid'
-                                    )
+# if args.model == "EfficientNet":
+#     model_name = 'efficientnet-b6'
+#     image_size = EfficientNet.get_image_size(model_name) 
+#     model = EfficientNet.from_pretrained(model_name, num_classes=1)
+#     preprocessing_transform = Compose([Resize(224), transforms.ToTensor(),
+#     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),])
+
+
+preprocessing_fn = models.encoders.get_preprocessing_fn(args.encoder, args.pretrained)
+preprocessing_transform = Compose([preprocessing_fn])
+model = getattr(models, args.model)(
+                                    encoder_name=args.encoder,
+                                    encoder_weights=args.pretrained, 
+                                    classes=1, 
+                                    activation='sigmoid'
+                                )
 model.cuda()
-
-train_transform = Compose([PrepareData()])
-valid_transform = Compose([PrepareData()])
-
+train_transform = albu.Compose([
+            albu.HorizontalFlip(p=0.5),
+            albu.RandomBrightness(p=0.1, limit=0.1),
+            albu.RandomContrast(p=0.1, limit=0.1),
+            albu.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=10, border_mode=cv2.BORDER_CONSTANT, p=0.7)
+        ], p=1.0)
+#valid_transform = Compose([PrepareData()])
+valid_transform = None
 #print(sys.argv)
 os.makedirs(args.log_dir, exist_ok=True)
 with open(os.path.join(args.log_dir, 'command.sh'), 'w') as f:
@@ -89,12 +95,13 @@ val_data_len = None
 if args.debug:
     tr_data_len = 1000
     val_data_len = 100
-train_dataset = SIIMDataset(subset='train', transform=train_transform, preprocessing=preprocessing_transform, 
+train_dataset = SIIMDataset(subset='train', augs=train_transform, preprocessing=preprocessing_transform, 
                             img_size=args.img_size, folds_dir=args.folds_dir, fold_id=args.fold_id, data_len=tr_data_len)
-valid_dataset = SIIMDataset(subset='valid', transform=valid_transform, preprocessing=preprocessing_transform, 
+valid_dataset = SIIMDataset(subset='valid', augs=valid_transform, preprocessing=preprocessing_transform, 
                             img_size=args.img_size, folds_dir=args.folds_dir, fold_id=args.fold_id, data_len=val_data_len)
 
-train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=args.batch_size,
+
+train_dataloader = DataLoader(train_dataset, sampler=ImbalancedDatasetSampler(train_dataset), batch_size=args.batch_size,
                               num_workers=args.num_workers, drop_last=True)
 valid_dataloader = DataLoader(valid_dataset, shuffle=False, batch_size=args.batch_size,
                               num_workers=args.num_workers, drop_last=True)
@@ -150,7 +157,7 @@ if args.resume:
         model.load_state_dict(saved_checkpoint['model_state'])
 
         if not args.resume_without_optimizer:
-            optimizer.load_state_dict(saved_checkpoint['optimizer_state'])
+            #optimizer.load_state_dict(saved_checkpoint['optimizer_state'])
             #lr_scheduler.load_state_dict(saved_checkpoint['lr_scheduler'])
             best_loss = saved_checkpoint.get('loss_val', best_loss)
             best_dice = saved_checkpoint.get('dice_val', best_dice)

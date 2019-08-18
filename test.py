@@ -12,6 +12,7 @@ import models
 from data_process import SIIMDataset
 from data_process.data_utils import *
 from utils import *
+import albumentations as albu
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--batch_size", type=int, default=32, help='batch size')
@@ -75,16 +76,14 @@ def predict(model, batch, flipped_batch, use_gpu):
     return probs
 
 def test():
-    test_transform = Compose([PrepareData()])
     preprocessing_transform = Compose([preprocessing_fn])
 
-    test_dataset =SIIMDataset(subset='test', transform=test_transform, 
+    test_dataset =SIIMDataset(subset='test', 
                     preprocessing=preprocessing_transform, img_size=checkpoint['img_size'])
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, num_workers=args.num_workers)
 
-    flipped_test_transform = Compose([PrepareData(), 
-                                      HorizontalFlip()])
-    flipped_test_dataset = SIIMDataset(subset='test', transform=flipped_test_transform, 
+    flipped_test_transform = albu.Compose([albu.HorizontalFlip(p=1.0)])
+    flipped_test_dataset = SIIMDataset(subset='test', augs=flipped_test_transform, 
                                 preprocessing=preprocessing_transform, img_size=checkpoint['img_size'])
     flipped_test_dataloader_iter = iter(DataLoader(flipped_test_dataset, batch_size=args.batch_size,
                                                    num_workers=args.num_workers))

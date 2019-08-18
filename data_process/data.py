@@ -25,11 +25,10 @@ def data_filter(root, data_ids, p_keep):
 
 class SIIMDataset(Dataset):
 
-    def __init__(self, root='../input/data', subset='train', transform=None, preprocessing=None, img_size=1024,
+    def __init__(self, root='../input/data', subset='train', augs=None, preprocessing=None, img_size=1024,
                 folds_dir='10folds', fold_id=0, prob_keep=None, data_len=None):
         
         folds_dir = os.path.join('data_process/splits', folds_dir)
-        assert transform is not None
         assert subset in ['train', 'valid', 'test'], 'Unknown subset: {}'.format(subset)
         num_folds = len(glob.glob(folds_dir + '/*'))
         assert num_folds % 2 == 0
@@ -37,7 +36,7 @@ class SIIMDataset(Dataset):
         print('SIIMDataset::folds version={}'.format(os.path.basename(folds_dir)))
 
         self.root = root
-        self.transform = transform
+        self.augs = augs
         self.preprocessing = preprocessing
         self.subset = subset
         self.features_dict = {}
@@ -72,10 +71,15 @@ class SIIMDataset(Dataset):
         img = cv2.imread(os.path.join(self.img_dir, img_id + '.png'), 0)
         target =cv2.imread(os.path.join(self.label_dir, img_id + '.png'), 0) if not self.subset == 'test' else np.zeros(img.shape)
 
-        # apply transforms to both
-        img, target = self.transform({'input': img, 'mask': target}).values()
+        # apply data preperation
+        prepared_data = PrepareData()({'input': img, 'mask': target})
+        img, target = prepared_data['input'],  prepared_data['mask']
         # apply preprocessing
         img_processed = self.preprocessing(img)
+
+        if self.augs:
+            augmented = self.augs(image=img, mask=target)
+            img, target = augmented['image'], augmented['mask']
 
         if target is not None:
             assert target.max() <= 1.0, 'Wrong scaling for target mask (max val = {})'.format(target.max())
